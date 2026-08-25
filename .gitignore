@@ -1,0 +1,19 @@
+# Python runtime artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Native build artifacts
+build/
+out/
+*.obj
+*.pdb
+*.exe
+*.dll
+*.lib
+*.exp
+
+# Local service data and credentials
+.env
+postgres-data/
+logs/
