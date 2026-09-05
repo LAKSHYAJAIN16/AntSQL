@@ -28,7 +28,7 @@ void GatewayTests() {
   Forwarder forwarder;
   Gateway gateway("source", router, topology, executor, forwarder);
   QueryRequest request{"SELECT * FROM readings WHERE site_id = 7",
-                       {QueryKind::Select, "readings", 7, false}};
+                       {QueryKind::Select, "readings", 7, false}, {}, 16};
 
   const auto remote = gateway.Execute(request);
   assert(remote.status == QueryStatus::Ok && forwarder.calls == 1 && executor.calls == 0);

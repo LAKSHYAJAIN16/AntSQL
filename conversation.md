@@ -40,6 +40,13 @@ This is a concise project history, preserved alongside the source tree.
   - `7aeb27c` C++ pheromone routing core.
   - `c199b6b` gateway routing contract.
   - `4accea5` parser-agnostic SQL validation boundary.
+  - Added an in-process `IForwarder` implementation and multi-gateway routing
+    regression. It exercises a real gateway hop and unavailable-peer feedback
+    without requiring gRPC, PostgreSQL, or libpq.
+  - Added mutable in-memory topology state for the native harness and extended
+    the regression to three gateways. Gateway reinforcement now applies only
+    to the locally selected edge, preventing a relay from learning invalid
+    pheromone entries for upstream hops.
 
 ## Current blockers and next work
 
@@ -48,5 +55,6 @@ This is a concise project history, preserved alongside the source tree.
 - An attempt to install CMake/Ninja/PostgreSQL was blocked because the Windows
   session is not elevated.
 - Next implementation layer after those dependencies are available: libpq
-  shard adapter, PostgreSQL parser adapter, Flight SQL endpoint, internal gRPC
-  forwarding, and a native multi-process failure-test harness.
+  shard adapter, PostgreSQL parser adapter, Flight SQL endpoint, and internal
+  gRPC forwarding. The in-process forwarding harness is now available for
+  routing/failure integration tests in the meantime.

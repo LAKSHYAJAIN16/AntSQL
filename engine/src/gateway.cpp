@@ -32,9 +32,9 @@ QueryResponse Gateway::Execute(QueryRequest request) {
   --request.hop_budget;
   auto response = forwarder_.Forward(decision->next_hop, request);
   if (response.status == QueryStatus::Ok) {
-    auto observed_path = request.route;
-    observed_path.push_back(decision->next_hop);
-    router_.ObserveSuccess(key, observed_path, response.elapsed_ms);
+    // Router state is local to this gateway. Only reinforce the forwarding
+    // edge selected here; a downstream gateway learns its own outgoing edge.
+    router_.ObserveSuccess(key, {node_id_, decision->next_hop}, response.elapsed_ms);
   } else {
     router_.ObserveFailure(key, {node_id_, decision->next_hop});
   }

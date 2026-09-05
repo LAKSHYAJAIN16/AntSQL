@@ -8,10 +8,13 @@ production-routing core.
 
 The core implements local pheromone route selection, cost-sensitive success
 feedback, failure penalties, evaporation, exploration, and loop prevention.
-It has no external dependency yet and can be tested with clang++ directly:
+An in-process forwarder and mutable in-memory topology provide a
+dependency-free native multi-gateway harness; future gRPC forwarding and
+discovery will implement the same interfaces. It can be tested with clang++
+directly:
 
 ```powershell
-clang++ -std=c++23 -I engine/include engine/src/router.cpp engine/tests/router_test.cpp -o engine-router-tests.exe
+clang++ -std=c++23 -I engine/include engine/src/router.cpp engine/src/gateway.cpp engine/src/in_process_forwarder.cpp engine/src/in_memory_topology.cpp engine/src/sql.cpp engine/tests/router_test.cpp engine/tests/gateway_test.cpp engine/tests/in_process_forwarder_test.cpp engine/tests/sql_test.cpp -o engine-router-tests.exe
 .\engine-router-tests.exe
 ```
 
