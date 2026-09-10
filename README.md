@@ -20,3 +20,11 @@ clang++ -std=c++23 -I engine/include engine/src/router.cpp engine/src/gateway.cp
 
 Arrow Flight SQL, gRPC forwarding, PostgreSQL/libpq execution, and the native
 multi-node harness are the next layers built on this core.
+
+## Deployment scaffold
+
+[`deploy/`](deploy/) contains a Docker Compose stack for three PostgreSQL 16
+shards and its initialization schema. It is ready to provision the database
+cluster after Docker Desktop is installed, but it does not yet expose a
+deployable AntSQL gateway: that requires the pending libpq, Arrow Flight SQL,
+and gRPC adapters.

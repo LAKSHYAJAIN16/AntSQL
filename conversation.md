@@ -54,6 +54,10 @@ This is a concise project history, preserved alongside the source tree.
   Arrow Flight SQL, gRPC, and a PostgreSQL parser library.
 - An attempt to install CMake/Ninja/PostgreSQL was blocked because the Windows
   session is not elevated.
+- No local Docker, Kubernetes tooling, or PostgreSQL service is currently
+  present. A `deploy/` Docker Compose scaffold now defines three PostgreSQL 16
+  shards for when Docker Desktop is available; it is intentionally database-
+  only until the gateway adapters are implemented.
 - Next implementation layer after those dependencies are available: libpq
   shard adapter, PostgreSQL parser adapter, Flight SQL endpoint, and internal
   gRPC forwarding. The in-process forwarding harness is now available for

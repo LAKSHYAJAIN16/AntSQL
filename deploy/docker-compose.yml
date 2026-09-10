@@ -1,0 +1,50 @@
+name: antsql
+
+x-shard-common: &shard-common
+  image: postgres:16-alpine
+  restart: unless-stopped
+  environment:
+    POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    POSTGRES_DB: ${POSTGRES_DB:-antsql}
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+  networks:
+    - antsql
+
+services:
+  shard-0:
+    <<: *shard-common
+    ports:
+      - "${ANTSQL_SHARD_0_PORT:-5433}:5432"
+    volumes:
+      - shard-0-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+
+  shard-1:
+    <<: *shard-common
+    ports:
+      - "${ANTSQL_SHARD_1_PORT:-5434}:5432"
+    volumes:
+      - shard-1-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+
+  shard-2:
+    <<: *shard-common
+    ports:
+      - "${ANTSQL_SHARD_2_PORT:-5435}:5432"
+    volumes:
+      - shard-2-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+
+networks:
+  antsql:
+    driver: bridge
+
+volumes:
+  shard-0-data:
+  shard-1-data:
+  shard-2-data:

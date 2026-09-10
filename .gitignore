@@ -17,3 +17,5 @@ out/
 .env
 postgres-data/
 logs/
+# Local deployment secrets.
+deploy/.env
