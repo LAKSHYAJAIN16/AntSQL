@@ -50,6 +50,27 @@ This is a concise project history, preserved alongside the source tree.
   an interaction effect, not attributable to one arm — added as
   `paper/antsql_paper.md` §7, with a sharper, testable next step (vary
   AntSQL's hop budget) replacing the original vaguer "which arm" question.
+- Ran that hop-budget follow-up (`sim/run_hop_budget_sweep.py`): swept
+  `max_query_hops` in {4,6,8,10,15,25} at churn 0.20/0.30, 20 seeds,
+  adaptive-centralized vs. AntSQL only. Came back inconclusive — the
+  AntSQL-minus-adaptive gap didn't move monotonically with hop budget, and
+  per-cell standard deviations (0.10-0.20) dwarfed the differences between
+  hop budgets. Reported honestly in the paper as a null result rather than
+  dropped: the hop-budget/multi-hop-fragility hypothesis is not confirmed,
+  and the churn-0.30 interaction is still unexplained.
+- Attempted TCP connection reuse in `TcpForwarder` (cache one socket per
+  neighbor instead of connecting fresh every call) to reduce handshake
+  overhead. A new test caught a real bug: `TcpServer` closes the connection
+  after every single request, so the cached client-side socket is always
+  already dead before a second use — there is nothing valid to reuse
+  without first making `TcpServer` persistent-connection-aware. Doing that
+  properly requires serving connections concurrently (one thread per
+  connection instead of the current single accept-thread), which would
+  expose `Router`'s pheromone map and RNG — currently unsynchronized — to
+  real concurrent mutation for the first time. That is a separate,
+  higher-risk change than "add connection reuse," so the pooling attempt
+  was reverted back to the simple, already-tested one-connection-per-call
+  design rather than shipped half-fixed or with a latent race condition.
 
 ## Engine: SQL parser adapter
 

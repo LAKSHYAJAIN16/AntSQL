@@ -28,6 +28,7 @@ def run_condition(
     arrival_rate_per_node: float = 0.5,
     strategy_kwargs: dict | None = None,
     churn_arm_weights: dict[str, float] | None = None,
+    max_query_hops: int = 15,
 ) -> dict:
     graph = generate_topology("nsfnet_like", n=n_nodes, seed=seed)
     node_ids = list(graph.nodes())
@@ -43,7 +44,8 @@ def run_condition(
     strategy_cls = STRATEGIES[strategy_name]
     strategy = strategy_cls(graph, shard_map, node_ids, seed=seed + 4, **(strategy_kwargs or {}))
 
-    sim = Simulator(graph=graph, shard_map=shard_map, workload=workload, churn=churn, strategy=strategy)
+    sim = Simulator(graph=graph, shard_map=shard_map, workload=workload, churn=churn, strategy=strategy,
+                    max_query_hops=max_query_hops)
     metrics = sim.run(ticks)
 
     row = {

@@ -22,10 +22,12 @@ adaptive-centralized coordination in an intermediate churn band (roughly
 where the centralized baseline's completion degrades more gracefully than
 AntSQL's. A per-failure-mode ablation isolating each churn arm finds that no
 single arm reproduces this reversal — adaptive-centralized does not beat
-AntSQL on any arm run alone — pointing to an interaction between simultaneous
-node churn and AntSQL's multi-hop forwarding as the likely cause, rather
-than any one disruption type. These results sharpen, and partly revise, an
-earlier 3-seed preliminary result that reported a monotonic AntSQL advantage
+AntSQL on any arm run alone — so it must be an interaction effect rather
+than any one disruption type; a follow-up sweep of AntSQL's routing hop
+budget, the most obvious candidate mechanism, did not confirm a hop-budget
+explanation either, so the specific interaction remains an open question.
+These results sharpen, and partly revise, an earlier 3-seed preliminary
+result that reported a monotonic AntSQL advantage
 at high churn. They remain preliminary: variance is high at severe churn
 even at 20 seeds,
 the simulator abstracts SQL execution as shard reachability and path cost,
@@ -257,10 +259,29 @@ be alive at once) in a way that does not equally disrupt a centralized
 coordinator's single client-to-shard hop once its map happens to be
 current, while shard migration in isolation (which both adaptive
 strategies handle equally well) is not itself the driver. This narrows,
-rather than answers, next steps item (c) in section 8: the open question
+rather than answers, next steps item (c) in section 9: the open question
 is no longer "which arm" but whether AntSQL's hop budget and multi-hop
 path length specifically explain the compound-churn gap. Raw data:
 `results/failure_mode_ablation.csv`.
+
+**Update — the hop-budget test was run, and came back inconclusive.** We
+swept `max_query_hops` (the routing walk's hop budget, shared by every
+strategy) over {4, 6, 8, 10, 15, 25} at churn 0.20 and 0.30, 20 seeds,
+comparing only adaptive-centralized and AntSQL. The AntSQL-minus-adaptive
+success-rate gap did not move monotonically with hop budget in either
+direction (churn 0.30: -0.06 at hop budget 4, +0.10 at hop budget 10-15,
+back to -0.03 at hop budget 25) — a pattern that would support the
+multi-hop-fragility hypothesis would show the gap moving in one direction
+as the budget shrinks or grows, not oscillating. Per-cell standard
+deviations (0.10-0.20) are larger than every cross-hop-budget difference in
+the gap, so this specific hypothesis is not confirmed at 20 seeds: either
+hop budget is not the driver, or the effect is real but smaller than the
+noise floor at this seed count. Raw data: `results/hop_budget_sweep.csv`.
+The interaction behind the churn-0.30 reversal (section 6) is therefore
+still unexplained; ruling out one plausible mechanism is itself useful, but
+the next attempt should probably use a variance-reduction design (paired
+seeds across hop-budget values, not independent ones) rather than more
+independent seeds at the same noise floor.
 
 ## 8. Limitations
 
@@ -287,16 +308,17 @@ churn-0.30 reversal.
 The immediate research milestones are: (a) a seed count sufficient to bound
 the standard error at the churn rates where the crossover window is
 narrowest, likely 50-100 seeds or a paired/blocked variance-reduction design
-rather than independent seeds; (b) sweeping network diameter and simulated
-coordinator round-trip time to test H1's specific prediction that
-lambda-star moves in the predicted direction, not just that a crossover
-exists somewhere; and (c) testing the hop-budget/path-length hypothesis
-raised by §7 directly — rerun the compound churn-0.30 condition across a
-range of `hop_budget` values to see whether the AntSQL-vs-adaptive-
-centralized gap narrows as fewer simultaneously-alive hops are required,
-which would confirm multi-hop fragility under node churn as the specific
-interaction driving the reversal rather than shard migration or any other
-single arm.
+rather than independent seeds — the hop-budget sweep in §7 is a concrete
+example of an effect too small to see at 20 independent seeds; (b) sweeping
+network diameter and simulated coordinator round-trip time to test H1's
+specific prediction that lambda-star moves in the predicted direction, not
+just that a crossover exists somewhere; and (c) since the hop-budget/
+path-length hypothesis from §7 did not pan out at 20 seeds, either rerunning
+it with a paired/variance-reduced design per (a) or, if it still doesn't
+resolve, moving on to a different candidate mechanism for the churn-0.30
+interaction (e.g. specifically the timing of node death relative to an
+in-flight AntSQL routing decision versus a centralized coordinator's most
+recent broadcast, rather than path length per se).
 
 On the engineering side, `engine/` now has a real (if deliberately narrow)
 `ISqlParser` implementation, `SimpleSqlParser` — hand-written recursive
