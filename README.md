@@ -9,17 +9,22 @@ production-routing core.
 The core implements local pheromone route selection, cost-sensitive success
 feedback, failure penalties, evaporation, exploration, and loop prevention.
 An in-process forwarder and mutable in-memory topology provide a
-dependency-free native multi-gateway harness; future gRPC forwarding and
-discovery will implement the same interfaces. It can be tested with clang++
-directly:
+dependency-free native multi-gateway harness for single-process tests. A
+second `IForwarder` implementation, `TcpForwarder`/`TcpServer`, forwards the
+same routing contract over real TCP sockets (Winsock on Windows) with a
+hand-rolled, bounds-checked wire format — so multi-process/multi-machine
+routing and failure behavior can be exercised today without a gRPC or Arrow
+Flight SQL toolchain. A future gRPC/Flight SQL forwarder implements the same
+`IForwarder` interface and can replace either without changing `Gateway` or
+the routing contract. It can be tested with clang++ directly:
 
 ```powershell
-clang++ -std=c++23 -I engine/include engine/src/router.cpp engine/src/gateway.cpp engine/src/in_process_forwarder.cpp engine/src/in_memory_topology.cpp engine/src/sql.cpp engine/tests/router_test.cpp engine/tests/gateway_test.cpp engine/tests/in_process_forwarder_test.cpp engine/tests/sql_test.cpp -o engine-router-tests.exe
+clang++ -std=c++23 -I engine/include engine/src/router.cpp engine/src/gateway.cpp engine/src/in_process_forwarder.cpp engine/src/in_memory_topology.cpp engine/src/sql.cpp engine/src/wire.cpp engine/src/tcp_forwarder.cpp engine/tests/router_test.cpp engine/tests/gateway_test.cpp engine/tests/in_process_forwarder_test.cpp engine/tests/sql_test.cpp engine/tests/wire_test.cpp engine/tests/tcp_forwarder_test.cpp -lws2_32 -o engine-router-tests.exe
 .\engine-router-tests.exe
 ```
 
-Arrow Flight SQL, gRPC forwarding, PostgreSQL/libpq execution, and the native
-multi-node harness are the next layers built on this core.
+Arrow Flight SQL, gRPC forwarding, PostgreSQL/libpq execution, and connection
+pooling for the TCP transport are the next layers built on this core.
 
 ## Deployment scaffold
 

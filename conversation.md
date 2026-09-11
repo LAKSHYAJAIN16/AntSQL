@@ -60,6 +60,14 @@ This is a concise project history, preserved alongside the source tree.
     the regression to three gateways. Gateway reinforcement now applies only
     to the locally selected edge, preventing a relay from learning invalid
     pheromone entries for upstream hops.
+  - Added a second `IForwarder` implementation, `TcpForwarder`/`TcpServer`,
+    that forwards the same routing contract over real TCP sockets (Winsock)
+    with a hand-rolled, bounds-checked wire format (`engine/src/wire.cpp`).
+    This is dependency-free and exercises real serialization and socket I/O
+    without needing gRPC/Arrow Flight SQL, which remain unavailable in this
+    environment. Verified by compiling and running the full test suite with
+    clang++ directly (not just reasoned about): all tests pass, including a
+    real round trip over 127.0.0.1 and a stopped-server failure case.
 
 ## Current blockers and next work
 
