@@ -11,6 +11,7 @@ add_library(antsql_router
   engine/src/in_process_forwarder.cpp
   engine/src/in_memory_topology.cpp
   engine/src/sql.cpp
+  engine/src/simple_sql_parser.cpp
   engine/src/wire.cpp
   engine/src/tcp_forwarder.cpp)
 target_include_directories(antsql_router PUBLIC engine/include)
@@ -23,6 +24,7 @@ add_executable(antsql_router_tests
   engine/tests/gateway_test.cpp
   engine/tests/in_process_forwarder_test.cpp
   engine/tests/sql_test.cpp
+  engine/tests/simple_sql_parser_test.cpp
   engine/tests/wire_test.cpp
   engine/tests/tcp_forwarder_test.cpp)
 target_link_libraries(antsql_router_tests PRIVATE antsql_router)

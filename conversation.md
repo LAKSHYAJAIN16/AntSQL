@@ -39,6 +39,30 @@ This is a concise project history, preserved alongside the source tree.
 - Verified the SwAP and Bonfils & Bonnet citations flagged as unverified in
   `research/related_work.md`; both are now cited precisely in the paper's
   references.
+- Ran a per-failure-mode ablation (`sim/run_failure_mode_ablation.py`):
+  isolated each churn arm (node death, node revival, shard migration,
+  latency shift, workload shift) at churn 0.20/0.30, 20 seeds, all four
+  strategies. Latency/workload shift alone move no strategy's success rate;
+  node death/revival degrade all four similarly; shard migration alone is
+  where adaptive strategies (both centralized and AntSQL) pull ahead of
+  static/greedy ones, and AntSQL is not behind adaptive-centralized on any
+  single arm. Conclusion: the churn-0.30 reversal from the compound study is
+  an interaction effect, not attributable to one arm — added as
+  `paper/antsql_paper.md` §7, with a sharper, testable next step (vary
+  AntSQL's hop budget) replacing the original vaguer "which arm" question.
+
+## Engine: SQL parser adapter
+
+- Added `SimpleSqlParser` (`engine/include/antsql/simple_sql_parser.hpp`,
+  `engine/src/simple_sql_parser.cpp`): a real, hand-written recursive-descent
+  `ISqlParser` implementation for AntSQL's v1 SQL subset (single-table
+  SELECT/INSERT/UPDATE/DELETE, at most one integer-equality distribution-key
+  predicate, decomposable-aggregate detection). Not a PostgreSQL-grammar
+  parser — exists so the gateway has a real parser to route against before
+  libpg_query is available in this environment; swappable later without
+  touching `ISqlParser`/`SqlValidator`/`Gateway`. Verified with clang++
+  directly, including a bug caught in the test itself (a string literal on
+  the key column is valid SQL, not a parse error) before it was fixed.
 
 ## Production direction
 
