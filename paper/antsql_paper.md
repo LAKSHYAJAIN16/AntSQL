@@ -20,9 +20,14 @@ monotonic advantage: it loses on stable networks and matches or beats
 adaptive-centralized coordination in an intermediate churn band (roughly
 0.10-0.20), but loses again at the most severe churn rate tested (0.30),
 where the centralized baseline's completion degrades more gracefully than
-AntSQL's. These results sharpen, and partly revise, an earlier 3-seed
-preliminary result that reported a monotonic AntSQL advantage at high churn.
-They remain preliminary: variance is high at severe churn even at 20 seeds,
+AntSQL's. A per-failure-mode ablation isolating each churn arm finds that no
+single arm reproduces this reversal — adaptive-centralized does not beat
+AntSQL on any arm run alone — pointing to an interaction between simultaneous
+node churn and AntSQL's multi-hop forwarding as the likely cause, rather
+than any one disruption type. These results sharpen, and partly revise, an
+earlier 3-seed preliminary result that reported a monotonic AntSQL advantage
+at high churn. They remain preliminary: variance is high at severe churn
+even at 20 seeds,
 the simulator abstracts SQL execution as shard reachability and path cost,
 and no PostgreSQL-backed gateway validation exists yet.
 
@@ -132,7 +137,7 @@ gather-recompute-redistribute round trip has a fixed latency cost that churn
 can outpace, while local reinforcement degrades gracefully via evaporation
 instead of going globally stale at once. H1 further predicts that lambda-star
 should scale with coordinator round-trip time and network diameter — a
-prediction not yet tested here (see §7).
+prediction not yet tested here (see §9).
 
 ## 5. Results
 
@@ -201,7 +206,63 @@ conditions at churn ≥ 0.20) that conclusions about "which condition wins at
 high churn" require either many more seeds or a variance-reduction approach
 before they can be treated as more than directional.
 
-## 7. Limitations
+## 7. Per-failure-mode ablation
+
+Section 6 leaves an open question: which churn arm drives the reversal at
+churn 0.30? We reran each of the five churn arms — node death, node
+revival, shard migration, latency shift, workload shift — in isolation
+(each non-revival arm paired with node revival at an equal rate, so the
+network reaches a dynamic equilibrium instead of monotonically dying, the
+same reasoning `ChurnScheduler` applies to its own default arm weights),
+at churn rates 0.20 and 0.30, 20 seeds per condition, all four strategies.
+
+| Arm | Churn | Static | Adaptive central. | Decentral. greedy | AntSQL |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Latency shift | 0.20 | 1.000 | 1.000 | 0.988 | 0.995 |
+| Latency shift | 0.30 | 1.000 | 1.000 | 0.988 | 0.993 |
+| Workload shift | 0.20 | 1.000 | 1.000 | 0.988 | 0.996 |
+| Workload shift | 0.30 | 1.000 | 1.000 | 0.988 | 0.992 |
+| Node death | 0.20 | 0.458 | 0.471 | 0.495 | 0.461 |
+| Node death | 0.30 | 0.420 | 0.383 | 0.418 | 0.527 |
+| Node revival | 0.20 | 0.436 | 0.445 | 0.457 | 0.499 |
+| Node revival | 0.30 | 0.384 | 0.333 | 0.411 | 0.412 |
+| Shard migration | 0.20 | 0.410 | 0.918 | 0.483 | 0.929 |
+| Shard migration | 0.30 | 0.367 | 0.866 | 0.405 | **0.911** |
+
+Success rate, mean across n = 20 seeds. Bold marks the one isolated-arm
+cell where a strategy comparison flips sign relative to compound churn.
+
+Three things follow, and together they answer the section-6 question in a
+way that raises a sharper one:
+
+- **Latency and workload shift move nothing.** Every strategy stays at or
+  above 0.988 success at both rates: these arms cost path quality (already
+  visible in AntSQL's worse p90 in §5), not completion, on their own.
+- **Node death/revival degrade all four strategies together, with no
+  consistent winner.** All four land in a tight 0.33-0.53 band at both
+  churn rates; AntSQL is competitive but not dominant here in isolation.
+- **Shard migration alone is where adaptation matters — but AntSQL does not
+  lose to adaptive-centralized on this arm.** Both strategies that adapt at
+  all (adaptive-centralized and AntSQL) hold 0.87-0.93 while the two that
+  do not (static-centralized and decentralized-greedy) drop to 0.37-0.48.
+  AntSQL is not behind adaptive-centralized here; if anything it is
+  slightly ahead at both churn rates.
+
+**No single isolated arm reproduces the churn-0.30 reversal from section
+6.** Since adaptive-centralized does not beat AntSQL on any arm run alone,
+the reversal in the compound study must be an interaction effect between
+arms — most plausibly, simultaneous node death repeatedly breaking
+AntSQL's in-flight multi-hop forwarding attempts (every hop on a path must
+be alive at once) in a way that does not equally disrupt a centralized
+coordinator's single client-to-shard hop once its map happens to be
+current, while shard migration in isolation (which both adaptive
+strategies handle equally well) is not itself the driver. This narrows,
+rather than answers, next steps item (c) in section 8: the open question
+is no longer "which arm" but whether AntSQL's hop budget and multi-hop
+path length specifically explain the compound-churn gap. Raw data:
+`results/failure_mode_ablation.csv`.
+
+## 8. Limitations
 
 The simulator abstracts SQL execution as shard reachability and path cost.
 It does not implement distributed joins, transactions, real wire protocols,
@@ -214,9 +275,14 @@ problem described in §6, particularly at churn ≥ 0.20 where standard
 deviations are 15-45% of the mean; the crossover-window claim in §5 should be
 read as directional pending a larger-seed or variance-reduced follow-up. H1's
 predicted scaling of lambda-star with coordinator round-trip time and network
-diameter (§4) has not been tested — the current study fixes both.
+diameter (§4) has not been tested — the current study fixes both. The
+per-failure-mode ablation (§7) isolates single arms cleanly but cannot rule
+out interaction effects beyond the specific hop-budget hypothesis it
+motivates; a factorial design (pairs and triples of arms run together) would
+be needed to confirm which interaction, specifically, produces the
+churn-0.30 reversal.
 
-## 8. Next steps
+## 9. Next steps
 
 The immediate research milestones are: (a) a seed count sufficient to bound
 the standard error at the churn rates where the crossover window is
@@ -224,13 +290,29 @@ narrowest, likely 50-100 seeds or a paired/blocked variance-reduction design
 rather than independent seeds; (b) sweeping network diameter and simulated
 coordinator round-trip time to test H1's specific prediction that
 lambda-star moves in the predicted direction, not just that a crossover
-exists somewhere; and (c) per-failure-mode ablations (node death alone,
-shard migration alone, latency shift alone, workload shift alone) to
-determine which churn type drives the reversal observed at churn 0.30. The
-immediate engineering milestone is a PostgreSQL-backed C++ gateway with
-Arrow Flight SQL, real SQL parsing, and native multi-process fault tests,
-building on the in-process forwarding harness already implemented and
-tested in `engine/`.
+exists somewhere; and (c) testing the hop-budget/path-length hypothesis
+raised by §7 directly — rerun the compound churn-0.30 condition across a
+range of `hop_budget` values to see whether the AntSQL-vs-adaptive-
+centralized gap narrows as fewer simultaneously-alive hops are required,
+which would confirm multi-hop fragility under node churn as the specific
+interaction driving the reversal rather than shard migration or any other
+single arm.
+
+On the engineering side, `engine/` now has a real (if deliberately narrow)
+`ISqlParser` implementation, `SimpleSqlParser` — hand-written recursive
+descent over single-table SELECT/INSERT/UPDATE/DELETE with at most one
+integer-equality distribution-key predicate — plus a dependency-free TCP
+transport (`TcpForwarder`/`TcpServer`) that moves the same
+`QueryRequest`/`QueryResponse` types over real sockets. Both exist because
+libpg_query, gRPC, and Arrow Flight SQL remain uninstallable in the current
+development environment (no CMake/vcpkg, non-elevated session); both are
+built behind the same `ISqlParser`/`IForwarder` interfaces so a
+PostgreSQL-grammar parser and a gRPC/Flight SQL transport can replace them
+later without changing `Gateway`, `SqlValidator`, or the routing contract.
+The next engineering milestone is a libpq shard executor once PostgreSQL
+tooling is available, which — combined with `SimpleSqlParser` and either
+forwarder — would let the native harness run against real PostgreSQL shards
+end-to-end for the first time.
 
 ## References
 

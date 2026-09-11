@@ -27,6 +27,7 @@ def run_condition(
     n_shards: int,
     arrival_rate_per_node: float = 0.5,
     strategy_kwargs: dict | None = None,
+    churn_arm_weights: dict[str, float] | None = None,
 ) -> dict:
     graph = generate_topology("nsfnet_like", n=n_nodes, seed=seed)
     node_ids = list(graph.nodes())
@@ -34,7 +35,10 @@ def run_condition(
     workload = WorkloadGenerator(
         node_ids=node_ids, n_shards=n_shards, arrival_rate_per_node=arrival_rate_per_node, seed=seed + 2
     )
-    churn = ChurnScheduler(graph=graph, n_shards=n_shards, churn_rate=churn_rate, seed=seed + 3)
+    churn = ChurnScheduler(
+        graph=graph, n_shards=n_shards, churn_rate=churn_rate, seed=seed + 3,
+        arm_weights=churn_arm_weights,
+    )
 
     strategy_cls = STRATEGIES[strategy_name]
     strategy = strategy_cls(graph, shard_map, node_ids, seed=seed + 4, **(strategy_kwargs or {}))
