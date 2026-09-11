@@ -26,6 +26,19 @@ This is a concise project history, preserved alongside the source tree.
   adaptive-centralized success at churn 0.20).
 - A 1,000-node flat simulation failed to scale, motivating a hierarchical
   gateway overlay.
+- Reran the resilience study at 20 seeds (up from 3) across five churn
+  rates (0.00-0.30, up from four), all four conditions including the
+  decentralized-greedy ablation. Findings revised from the 3-seed study:
+  AntSQL decisively beats decentralized-greedy at every non-zero churn rate
+  (isolating stigmergic credit assignment as the source of its advantage,
+  not decentralization alone), but the AntSQL-vs-adaptive-centralized
+  crossover is a bounded window (roughly churn 0.10-0.20), not a monotonic
+  advantage at high churn — AntSQL loses again at churn 0.30. Variance at
+  high churn is large even at 20 seeds. See `paper/antsql_paper.md` §5-6 and
+  `results/resilience_study_v2.csv` / `resilience_study_v2_summary.csv`.
+- Verified the SwAP and Bonfils & Bonnet citations flagged as unverified in
+  `research/related_work.md`; both are now cited precisely in the paper's
+  references.
 
 ## Production direction
 

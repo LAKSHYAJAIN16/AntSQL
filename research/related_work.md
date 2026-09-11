@@ -559,7 +559,14 @@ other as a second validation domain than trying to motivate both equally.
   for every citation in §1, §2, §3, §4 above before they go into a real
   .bib — several were found via ResearchGate/IGI abstract pages and need
   the canonical publisher record. (§2a's AntNet citation is now verified
-  from the primary source and ready to cite as-is.)
+  from the primary source and ready to cite as-is. SwAP and Bonfils &
+  Bonnet are now also verified — see `paper/antsql_paper.md` References:
+  SwAP is Zhou, Ooi, Tan & Tok, *An Adaptable Distributed Query Processing
+  Architecture*, Data & Knowledge Engineering 53(3):283-309, 2005 [not a
+  VLDB 2003 paper as originally assumed above — that was a same-author PhD
+  workshop paper with a different, narrower scope]; Bonfils & Bonnet is
+  confirmed as IPSN 2003, LNCS 2634, pp. 47-62, DOI
+  10.1007/3-540-36978-3_4.)
 - Decide whether to build the drift/churn generator from scratch or adapt
   DriftBench's — recommend at least reading its drift model before deciding.
 - **Superseded by §0.5** — the priority reading list is now Bonfils &
