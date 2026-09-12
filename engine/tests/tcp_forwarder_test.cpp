@@ -2,6 +2,7 @@
 #include "antsql/in_memory_topology.hpp"
 
 #include <cassert>
+#include <memory>
 
 namespace {
 using namespace antsql;
@@ -65,10 +66,89 @@ void TcpForwarderReportsUnknownPeerTests() {
   assert(response.status == QueryStatus::ShardUnavailable);
 }
 
+// TcpServer now serves connections concurrently (one thread per connection)
+// specifically so TcpForwarder can keep one socket per neighbor open across
+// calls instead of paying a fresh handshake every time. Verify the reuse
+// actually happens: five round trips should land on one accepted
+// connection at the server, not five.
+void TcpForwarderReusesConnectionAcrossCallsTests() {
+  Router owner_router(RouterConfig{.exploration_probability = 0.0});
+  InMemoryTopology owner_topology;
+  owner_topology.SetOwnedRoutes({{"orders", 3}});
+  Executor owner_executor;
+  NullForwarder owner_forwarder;
+  Gateway owner("owner", owner_router, owner_topology, owner_executor, owner_forwarder);
+
+  TcpServer server("127.0.0.1", /*port=*/0,
+                    [&owner](const QueryRequest& request) { return owner.Execute(request); });
+  server.Start();
+
+  Router source_router(RouterConfig{.exploration_probability = 0.0});
+  InMemoryTopology source_topology;
+  source_topology.SetNeighbors({{"owner", 1.0}});
+  Executor source_executor;
+  TcpForwarder forwarder;
+  forwarder.AddPeer("owner", "127.0.0.1", server.BoundPort());
+  Gateway source("source", source_router, source_topology, source_executor, forwarder);
+
+  QueryRequest request{"SELECT * FROM orders WHERE site_id = 3",
+                       {QueryKind::Select, "orders", 3, false}, {}, 16};
+  for (int i = 0; i < 5; ++i) {
+    const auto response = source.Execute(request);
+    assert(response.status == QueryStatus::Ok);
+  }
+  assert(owner_executor.calls == 5);
+  assert(server.ConnectionsAccepted() == 1);
+
+  server.Stop();
+}
+
+// A dead peer (server restarted, connection dropped) shouldn't wedge the
+// forwarder: the stale cached socket should be discarded and one fresh
+// connection attempted before reporting the neighbor unavailable.
+void TcpForwarderRecoversFromStaleCachedConnectionTests() {
+  Router owner_router(RouterConfig{.exploration_probability = 0.0});
+  InMemoryTopology owner_topology;
+  owner_topology.SetOwnedRoutes({{"orders", 5}});
+  Executor owner_executor;
+  NullForwarder owner_forwarder;
+  Gateway owner("owner", owner_router, owner_topology, owner_executor, owner_forwarder);
+
+  auto server = std::make_unique<TcpServer>(
+      "127.0.0.1", /*port=*/0, [&owner](const QueryRequest& request) { return owner.Execute(request); });
+  server->Start();
+  const auto port = server->BoundPort();
+
+  Router source_router(RouterConfig{.exploration_probability = 0.0});
+  InMemoryTopology source_topology;
+  source_topology.SetNeighbors({{"owner", 1.0}});
+  Executor source_executor;
+  TcpForwarder forwarder;
+  forwarder.AddPeer("owner", "127.0.0.1", port);
+  Gateway source("source", source_router, source_topology, source_executor, forwarder);
+
+  QueryRequest request{"SELECT * FROM orders WHERE site_id = 5",
+                       {QueryKind::Select, "orders", 5, false}, {}, 16};
+  assert(source.Execute(request).status == QueryStatus::Ok);
+
+  server->Stop();
+  server.reset();
+  // Same bound port, fresh listener: exercises the retry-on-stale path
+  // rather than just "peer unreachable."
+  auto revived = std::make_unique<TcpServer>(
+      "127.0.0.1", port, [&owner](const QueryRequest& request) { return owner.Execute(request); });
+  revived->Start();
+  assert(source.Execute(request).status == QueryStatus::Ok);
+  assert(owner_executor.calls == 2);
+  revived->Stop();
+}
+
 struct TcpForwarderTestRegistration {
   TcpForwarderTestRegistration() {
     TcpForwarderRoundTripsOverRealSocketTests();
     TcpForwarderReportsUnknownPeerTests();
+    TcpForwarderReusesConnectionAcrossCallsTests();
+    TcpForwarderRecoversFromStaleCachedConnectionTests();
   }
 } tcp_forwarder_test_registration;
 }  // namespace

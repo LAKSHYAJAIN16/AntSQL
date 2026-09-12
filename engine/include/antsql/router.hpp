@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <string>
@@ -44,6 +45,9 @@ struct RouterConfig {
   std::uint64_t random_seed{0};
 };
 
+// Thread-safe: one Router is shared by every connection thread on a
+// gateway (TcpServer serves connections concurrently), so all public
+// methods take mutex_ internally.
 class Router {
  public:
   explicit Router(RouterConfig config = {});
@@ -62,9 +66,14 @@ class Router {
  private:
   using NeighborScores = std::unordered_map<std::string, double>;
   RouterConfig config_;
+  mutable std::mutex mutex_;
   std::mt19937_64 rng_;
   std::unordered_map<RouteKey, NeighborScores, RouteKeyHash> pheromone_;
 
+  // Assumes mutex_ is already held; Score() and the locked entry points
+  // call this instead of the public Pheromone() to avoid relocking a
+  // non-recursive mutex.
+  double PheromoneLocked(const RouteKey& key, const std::string& neighbor) const;
   double Score(const RouteKey& key, const Neighbor& candidate) const;
 };
 

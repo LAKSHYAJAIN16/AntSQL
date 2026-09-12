@@ -14,6 +14,11 @@ std::size_t RouteKeyHash::operator()(const RouteKey& key) const noexcept {
 Router::Router(RouterConfig config) : config_(config), rng_(config.random_seed) {}
 
 double Router::Pheromone(const RouteKey& key, const std::string& neighbor) const {
+  std::scoped_lock lock(mutex_);
+  return PheromoneLocked(key, neighbor);
+}
+
+double Router::PheromoneLocked(const RouteKey& key, const std::string& neighbor) const {
   const auto route = pheromone_.find(key);
   if (route == pheromone_.end()) return config_.initial_pheromone;
   const auto score = route->second.find(neighbor);
@@ -21,7 +26,7 @@ double Router::Pheromone(const RouteKey& key, const std::string& neighbor) const
 }
 
 double Router::Score(const RouteKey& key, const Neighbor& candidate) const {
-  return Pheromone(key, candidate.id) / std::max(candidate.link_latency_ms, 0.001);
+  return PheromoneLocked(key, candidate.id) / std::max(candidate.link_latency_ms, 0.001);
 }
 
 std::optional<RouteDecision> Router::Choose(
@@ -32,6 +37,7 @@ std::optional<RouteDecision> Router::Choose(
                [&visited](const Neighbor& neighbor) { return !visited.contains(neighbor.id); });
   if (eligible.empty()) return std::nullopt;
 
+  std::scoped_lock lock(mutex_);
   std::bernoulli_distribution explore(config_.exploration_probability);
   if (explore(rng_)) {
     std::uniform_int_distribution<std::size_t> pick(0, eligible.size() - 1);
@@ -50,6 +56,7 @@ void Router::ObserveSuccess(const RouteKey& key, const std::vector<std::string>&
   const auto quality = config_.reference_cost_ms / std::max(total_cost_ms, 0.001);
   const auto reinforcement = config_.base_reinforcement * std::clamp(
       quality, config_.minimum_reinforcement_fraction, 1.0);
+  std::scoped_lock lock(mutex_);
   auto& scores = pheromone_[key];
   for (std::size_t index = 0; index + 1 < path.size(); ++index) {
     scores[path[index + 1]] += reinforcement;
@@ -58,12 +65,14 @@ void Router::ObserveSuccess(const RouteKey& key, const std::vector<std::string>&
 
 void Router::ObserveFailure(const RouteKey& key, const std::vector<std::string>& path) {
   if (path.size() < 2) return;
+  std::scoped_lock lock(mutex_);
   auto& scores = pheromone_[key];
   const auto& failed_next_hop = path.back();
-  scores[failed_next_hop] = std::max(0.0, Pheromone(key, failed_next_hop) * config_.failure_penalty);
+  scores[failed_next_hop] = std::max(0.0, PheromoneLocked(key, failed_next_hop) * config_.failure_penalty);
 }
 
 void Router::Evaporate() {
+  std::scoped_lock lock(mutex_);
   for (auto& [_, scores] : pheromone_) {
     for (auto& [__, amount] : scores) amount *= (1.0 - config_.evaporation_rate);
   }

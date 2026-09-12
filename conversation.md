@@ -85,6 +85,47 @@ This is a concise project history, preserved alongside the source tree.
   directly, including a bug caught in the test itself (a string literal on
   the key column is valid SQL, not a parse error) before it was fixed.
 
+## Engine: TCP connection reuse and Router thread-safety
+
+- Picked back up the connection-reuse attempt that was reverted earlier
+  (see above) by doing the prerequisite work it was blocked on:
+  - `TcpServer` now serves connections concurrently — one worker thread per
+    accepted connection, looping on request/response frames until the peer
+    disconnects — instead of one request per connection on a single accept
+    thread. `Stop()` was reordered to join the accept thread first (so no
+    new connections can arrive), then close and join every still-open
+    connection, closing the race where a connection accepted right at
+    shutdown could be left unjoined.
+  - `Router` gained an internal mutex; all public methods lock it, with a
+    lock-already-held internal `PheromoneLocked` helper so `Choose()` (which
+    calls `Score()` which calls `Pheromone()`) doesn't deadlock on its own
+    non-recursive mutex. It is now safe for the same `Router` instance to be
+    mutated concurrently from multiple `TcpServer` connection threads, which
+    is exactly what a gateway under concurrent load does.
+  - `TcpForwarder` now caches one reusable socket per neighbor (guarded by
+    its own per-connection mutex, so concurrent forwards to *different*
+    neighbors don't block each other, while forwards to the *same* neighbor
+    serialize on that neighbor's socket — this transport doesn't pipeline).
+    If a call using a previously-live cached socket fails, it's dropped and
+    one fresh connection is attempted before reporting the neighbor
+    unavailable, so a stale connection (e.g. the peer's `TcpServer` process
+    restarted) self-heals on the next call instead of wedging.
+  - Hit and fixed a real MSVC STL portability bug along the way:
+    `std::unordered_map<std::string, std::unique_ptr<Connection>>` with
+    `Connection` forward-declared in the header (the usual Pimpl pattern)
+    failed to compile — MSVC's `unordered_map`, unlike `vector`, doesn't
+    guarantee support for an incomplete value type, and eagerly instantiated
+    the hash table's internals. Switched to a raw `Connection*` map with
+    explicit `new`/`delete`, which sidesteps the guarantee entirely.
+  - Added a Router concurrency stress test (8 threads, 500 iterations each,
+    interleaving `Choose`/`ObserveSuccess`/`ObserveFailure`/`Evaporate` on
+    one shared instance) and two new `TcpForwarder` tests: one asserting
+    five round trips to the same neighbor land on a single accepted TCP
+    connection (`TcpServer::ConnectionsAccepted()`), one asserting recovery
+    after the peer's server is stopped and restarted on the same port.
+    Verified by compiling and running the full suite with clang++ directly,
+    five consecutive runs with no flakes.
+
 ## Production direction
 
 - Product choice: C++23 federated SQL gateway, not a new storage engine.
@@ -128,3 +169,12 @@ This is a concise project history, preserved alongside the source tree.
   shard adapter, PostgreSQL parser adapter, Flight SQL endpoint, and internal
   gRPC forwarding. The in-process forwarding harness is now available for
   routing/failure integration tests in the meantime.
+- The connection-reuse blocker is resolved (see "Engine: TCP connection
+  reuse and Router thread-safety" above): `TcpServer` is persistent-
+  connection-aware and `Router` is thread-safe. Remaining dependency-free
+  engine work in this area: `TcpForwarder`'s cached connection is one
+  socket per neighbor, so concurrent calls to the same neighbor serialize
+  rather than pipeline — a connection pool (multiple sockets per neighbor)
+  would remove that serialization if a workload ever needs the throughput,
+  but nothing in the current test/research harness has demonstrated that
+  need yet.

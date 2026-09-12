@@ -1,6 +1,7 @@
 #include "antsql/tcp_forwarder.hpp"
 #include "antsql/wire.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -145,7 +146,27 @@ void TcpServer::Stop() {
   if (!running_.exchange(false)) return;
   // Closing the listening socket unblocks the accept() call in AcceptLoop.
   CloseSocket(static_cast<SocketHandle>(listen_socket_));
+  // Join the accept thread first: once it has returned, AcceptLoop can no
+  // longer add to open_connections_/connection_threads_, so the two loops
+  // below see the final, complete set with no race against new arrivals.
   if (accept_thread_.joinable()) accept_thread_.join();
+
+  {
+    std::scoped_lock lock(connections_mutex_);
+    // Unblocks each connection thread's recv() so it can exit its loop and
+    // be joined below, instead of waiting for the peer to close first.
+    for (const auto client : open_connections_) {
+      CloseSocket(static_cast<SocketHandle>(client));
+    }
+    open_connections_.clear();
+  }
+  {
+    std::scoped_lock lock(threads_mutex_);
+    for (auto& worker : connection_threads_) {
+      if (worker.joinable()) worker.join();
+    }
+    connection_threads_.clear();
+  }
 }
 
 void TcpServer::AcceptLoop() {
@@ -156,16 +177,57 @@ void TcpServer::AcceptLoop() {
       if (!running_) return;  // Stop() closed the listening socket.
       continue;
     }
-
-    std::string request_bytes;
-    if (RecvFrame(client, request_bytes)) {
-      const auto request = wire::DecodeRequest(request_bytes);
-      const auto response = request ? handler_(*request)
-                                     : QueryResponse{QueryStatus::ExecutionError,
-                                                     "malformed request frame", 0.0};
-      SendFrame(client, wire::EncodeResponse(response));
+    if (!running_) {
+      // Accepted in the race window right as Stop() began; refuse it
+      // rather than starting a connection thread Stop() won't wait for.
+      CloseSocket(client);
+      continue;
     }
-    CloseSocket(client);
+
+    const auto client_handle = static_cast<std::intptr_t>(client);
+    ++connections_accepted_;
+    {
+      std::scoped_lock lock(connections_mutex_);
+      open_connections_.push_back(client_handle);
+    }
+    std::thread worker(&TcpServer::HandleConnection, this, client_handle);
+    std::scoped_lock lock(threads_mutex_);
+    connection_threads_.push_back(std::move(worker));
+  }
+}
+
+void TcpServer::HandleConnection(std::intptr_t client_socket) {
+  const auto client = static_cast<SocketHandle>(client_socket);
+  while (running_) {
+    std::string request_bytes;
+    if (!RecvFrame(client, request_bytes)) break;  // peer closed, or Stop() did.
+    const auto request = wire::DecodeRequest(request_bytes);
+    const auto response = request ? handler_(*request)
+                                   : QueryResponse{QueryStatus::ExecutionError,
+                                                   "malformed request frame", 0.0};
+    if (!SendFrame(client, wire::EncodeResponse(response))) break;
+  }
+  CloseSocket(client);
+
+  std::scoped_lock lock(connections_mutex_);
+  auto& connections = open_connections_;
+  connections.erase(std::remove(connections.begin(), connections.end(), client_socket),
+                    connections.end());
+}
+
+struct TcpForwarder::Connection {
+  // Guards socket use for the lifetime of one Forward() call: this
+  // transport doesn't pipeline requests, so concurrent forwards to the same
+  // neighbor share the cached socket one at a time rather than racing on it.
+  std::mutex mutex;
+  SocketHandle socket{kInvalidSocket};
+};
+
+TcpForwarder::~TcpForwarder() {
+  std::scoped_lock lock(mutex_);
+  for (auto& [_, connection] : connections_) {
+    if (connection->socket != kInvalidSocket) CloseSocket(connection->socket);
+    delete connection;
   }
 }
 
@@ -174,8 +236,49 @@ void TcpForwarder::AddPeer(std::string node_id, std::string host, std::uint16_t 
   peers_.insert_or_assign(std::move(node_id), Peer{std::move(host), port});
 }
 
+QueryResponse TcpForwarder::ExchangeOverConnection(Connection& connection, const Peer& peer,
+                                                   const QueryRequest& request,
+                                                   const std::string& neighbor) {
+  if (connection.socket == kInvalidSocket) {
+    connection.socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (connection.socket == kInvalidSocket) {
+      return {QueryStatus::ShardUnavailable, "socket() failed for neighbor: " + neighbor, 0.0};
+    }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(peer.port);
+    const bool valid_address = inet_pton(AF_INET, peer.host.c_str(), &address.sin_addr) == 1;
+    if (!valid_address ||
+        connect(connection.socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+      CloseSocket(connection.socket);
+      connection.socket = kInvalidSocket;
+      return {QueryStatus::ShardUnavailable, "unreachable neighbor: " + neighbor, 0.0};
+    }
+  }
+
+  if (!SendFrame(connection.socket, wire::EncodeRequest(request))) {
+    CloseSocket(connection.socket);
+    connection.socket = kInvalidSocket;
+    return {QueryStatus::ShardUnavailable, "unreachable neighbor: " + neighbor, 0.0};
+  }
+
+  std::string response_bytes;
+  if (!RecvFrame(connection.socket, response_bytes)) {
+    CloseSocket(connection.socket);
+    connection.socket = kInvalidSocket;
+    return {QueryStatus::ShardUnavailable, "unreachable neighbor: " + neighbor, 0.0};
+  }
+
+  if (const auto decoded = wire::DecodeResponse(response_bytes)) return *decoded;
+  // Transport succeeded but the payload didn't decode; the connection
+  // itself is still good, so keep it cached for reuse.
+  return {QueryStatus::ExecutionError, "malformed response frame from: " + neighbor, 0.0};
+}
+
 QueryResponse TcpForwarder::Forward(const std::string& neighbor, const QueryRequest& request) {
   Peer peer;
+  Connection* connection = nullptr;
   {
     std::scoped_lock lock(mutex_);
     const auto found = peers_.find(neighbor);
@@ -183,33 +286,23 @@ QueryResponse TcpForwarder::Forward(const std::string& neighbor, const QueryRequ
       return {QueryStatus::ShardUnavailable, "no known address for neighbor: " + neighbor, 0.0};
     }
     peer = found->second;
+    auto& slot = connections_[neighbor];
+    if (!slot) slot = new Connection();
+    connection = slot;
   }
 
   EnsureNetworkInit();
-  const auto client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (client_socket == kInvalidSocket) {
-    return {QueryStatus::ShardUnavailable, "socket() failed for neighbor: " + neighbor, 0.0};
+  std::scoped_lock connection_lock(connection->mutex);
+  // A cached socket may have gone stale between calls (e.g. the peer's
+  // TcpServer connection thread exited). If the *first* attempt fails and
+  // it was using what looked like a live cached connection, retry once on
+  // a fresh one before reporting the neighbor unavailable; a failure on an
+  // already-fresh connection is a real unreachable-neighbor result.
+  const bool had_cached_connection = connection->socket != kInvalidSocket;
+  auto response = ExchangeOverConnection(*connection, peer, request, neighbor);
+  if (response.status == QueryStatus::ShardUnavailable && had_cached_connection) {
+    response = ExchangeOverConnection(*connection, peer, request, neighbor);
   }
-
-  sockaddr_in address{};
-  address.sin_family = AF_INET;
-  address.sin_port = htons(peer.port);
-  const bool valid_address = inet_pton(AF_INET, peer.host.c_str(), &address.sin_addr) == 1;
-
-  QueryResponse response{QueryStatus::ShardUnavailable, "unreachable neighbor: " + neighbor, 0.0};
-  if (valid_address &&
-      connect(client_socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0 &&
-      SendFrame(client_socket, wire::EncodeRequest(request))) {
-    std::string response_bytes;
-    if (RecvFrame(client_socket, response_bytes)) {
-      if (const auto decoded = wire::DecodeResponse(response_bytes)) {
-        response = *decoded;
-      } else {
-        response = {QueryStatus::ExecutionError, "malformed response frame from: " + neighbor, 0.0};
-      }
-    }
-  }
-  CloseSocket(client_socket);
   return response;
 }
 

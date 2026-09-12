@@ -14,7 +14,13 @@ second `IForwarder` implementation, `TcpForwarder`/`TcpServer`, forwards the
 same routing contract over real TCP sockets (Winsock on Windows) with a
 hand-rolled, bounds-checked wire format — so multi-process/multi-machine
 routing and failure behavior can be exercised today without a gRPC or Arrow
-Flight SQL toolchain. A future gRPC/Flight SQL forwarder implements the same
+Flight SQL toolchain. `TcpServer` serves connections concurrently (one
+thread per connection) so `TcpForwarder` can cache and reuse one socket per
+neighbor instead of paying a fresh handshake on every call, retrying once
+on a fresh connection if a cached one turns out to be stale. `Router` is
+thread-safe (an internal mutex) so the same shared instance can absorb
+concurrent route decisions and pheromone updates from multiple connection
+threads. A future gRPC/Flight SQL forwarder implements the same
 `IForwarder` interface and can replace either without changing `Gateway` or
 the routing contract. `SimpleSqlParser` is a real (deliberately narrow)
 `ISqlParser` implementation — hand-written recursive descent over
