@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="AntSQL Cloud: a Firestore-simple document database routed by a real ant-colony pheromone algorithm. It learns which replica is fastest and reroutes around failures on its own." />
 <title>AntSQL Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
     color-scheme: light dark;
@@ -17,17 +21,38 @@
     --accent-2: #ffb066;
     --good: #4ade80;
     --bad: #f87171;
-    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
+  html { scrollbar-color: var(--border) var(--bg); }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font);
     line-height: 1.5;
+    font-variant-numeric: tabular-nums;
   }
   a { color: var(--accent-2); }
+  h1, h2, h3, h4 { font-family: var(--font); letter-spacing: -0.02em; }
+
+  ::selection { background: var(--accent); color: #1a0e02; }
+
+  *:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--panel-2); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
   header {
     padding: 20px clamp(16px, 5vw, 64px);
     display: flex;
@@ -36,14 +61,22 @@
     border-bottom: 1px solid var(--border);
   }
   .brand { font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
-  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
-  nav a { margin-left: 20px; color: var(--muted); text-decoration: none; font-size: 0.92rem; }
+  .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.8); }
+  }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.92rem; }
   nav a:hover { color: var(--text); }
 
   .hero { padding: clamp(32px, 8vw, 96px) clamp(16px, 5vw, 64px) 32px; max-width: 980px; }
-  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0 0 16px; letter-spacing: -0.02em; }
-  .hero p { color: var(--muted); font-size: 1.15rem; max-width: 620px; }
-  .hero .tag { display: inline-block; font-size: 0.8rem; color: var(--accent-2); border: 1px solid var(--accent); border-radius: 999px; padding: 4px 12px; margin-bottom: 18px; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0 0 16px; letter-spacing: -0.03em; }
+  .hero p { color: var(--muted); font-size: 1.15rem; max-width: 65ch; }
+  .hero p strong { color: var(--accent-2); font-weight: 600; }
 
   section { padding: 28px clamp(16px, 5vw, 64px); max-width: 1080px; }
   h2 { font-size: 1.4rem; margin-bottom: 6px; }
@@ -59,12 +92,17 @@
     font-size: 0.86rem;
   }
   code { font-family: var(--mono); }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 8px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-  .card h3 { margin: 0 0 8px; font-size: 1rem; }
-  .card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+  .feature-list { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 32px; }
+  @media (max-width: 640px) { .feature-list { grid-template-columns: 1fr; } }
+  .feature-list li { border-top: 1px solid var(--border); padding: 18px 0; }
+  .feature-list h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 600; }
+  .feature-list p { margin: 0; color: var(--muted); font-size: 0.92rem; max-width: 42ch; }
 
   #playground { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 800px) { #playground { grid-template-columns: 1fr; } }
@@ -78,9 +116,12 @@
     font-size: 0.86rem;
   }
   textarea { width: 100%; min-height: 90px; resize: vertical; }
-  button { cursor: pointer; background: var(--accent); color: #1a0e02; font-weight: 700; border: none; }
+  button { cursor: pointer; background: var(--accent); color: #1a0e02; font-weight: 700; border: none; transition: background 0.15s ease; }
   button:hover { background: var(--accent-2); }
+  button:disabled { cursor: not-allowed; opacity: 0.45; background: var(--panel-2); color: var(--muted); }
   button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+  button.ghost:hover { background: var(--panel-2); border-color: var(--muted); }
+  button.ghost:disabled { background: transparent; border-color: var(--border); }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .row select, .row input { flex: 1; min-width: 100px; }
   #output { white-space: pre-wrap; word-break: break-word; min-height: 220px; max-height: 420px; overflow-y: auto; }
@@ -89,8 +130,17 @@
   .pill.dead { background: rgba(248,113,113,0.15); color: var(--bad); }
   #colony .shard { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
   #colony .shard h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
-  #colony .replica { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.86rem; }
+  #colony .replica { padding: 8px 0; font-size: 0.86rem; border-bottom: 1px solid var(--border); }
+  #colony .replica:last-child { border-bottom: none; }
+  #colony .replica-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   #colony .replica button { padding: 2px 8px; font-size: 0.72rem; }
+  #colony .pbar-track { height: 4px; border-radius: 2px; background: var(--panel-2); margin-top: 6px; overflow: hidden; }
+  #colony .pbar-fill {
+    height: 100%; width: 100%; border-radius: 2px; background: var(--accent);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #colony .replica.dead .pbar-fill { background: var(--muted); }
   #apiKeyBox { font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
   footer { padding: 32px clamp(16px, 5vw, 64px); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 24px; }
 </style>
@@ -108,22 +158,21 @@
 </header>
 
 <div class="hero">
-  <div class="tag">ant-colony adaptive routing, not a mock</div>
   <h1>A document database that heals itself.</h1>
   <p>
     Firestore-simple to use — collections, documents, one API key, no schema,
-    no ops. Underneath, every read is routed by a real pheromone-based ant
-    colony algorithm across replicated shards: it learns which replica is
-    fastest, and reroutes around failures on its own, with no coordinator
-    ever recomputing a plan.
+    no ops. Underneath, every read is routed by <strong>a real pheromone-based
+    ant colony algorithm</strong>, not a mocked one, across replicated shards:
+    it learns which replica is fastest and reroutes around failures on its
+    own, with no coordinator ever recomputing a plan.
   </p>
 </div>
 
 <section id="quickstart">
   <h2>Quickstart</h2>
-  <p class="sub">One key, one script. No dashboard sign-up flow.</p>
+  <p class="sub">One key and one script — no dashboard sign-up flow to sit through.</p>
   <pre><code>curl -X POST http://localhost:4280/v1/keys
-# {"apiKey":"ant_...")}
+# {"apiKey":"ant_..."}
 
 curl -X POST http://localhost:4280/v1/db/users \
   -H "Authorization: Bearer ant_..." \
@@ -141,17 +190,17 @@ const ref  = await db.collection('users').add({ name: 'Ada' });
 const snap = await db.collection('users').doc(ref.id).get();
 console.log(snap.data()); // { name: 'Ada' }</code></pre>
 
-  <div class="grid">
-    <div class="card"><h3>Schemaless</h3><p>Documents are plain JSON. No migrations, no column types.</p></div>
-    <div class="card"><h3>Self-healing reads</h3><p>Every read tries the ant colony's current favorite replica first, and transparently falls back if it's down.</p></div>
-    <div class="card"><h3>One key = one namespace</h3><p>Every API key is its own isolated database. No cross-tenant collisions.</p></div>
-    <div class="card"><h3>Durable</h3><p>Every write is appended to a write-ahead log per replica before it's acknowledged.</p></div>
-  </div>
+  <ul class="feature-list">
+    <li><h3>Schemaless</h3><p>Documents are plain JSON. No migrations, no column types.</p></li>
+    <li><h3>Self-healing reads</h3><p>Every read tries the ant colony's current favorite replica first, and transparently falls back if it's down.</p></li>
+    <li><h3>One key = one namespace</h3><p>Every API key is its own isolated database. No cross-tenant collisions.</p></li>
+    <li><h3>Durable</h3><p>Every write is appended to a write-ahead log per replica before it's acknowledged.</p></li>
+  </ul>
 </section>
 
 <section id="playground">
   <h2>Playground</h2>
-  <p class="sub">Talks to this server directly — nothing here is faked.</p>
+  <p class="sub">Every request below hits this server directly, live.</p>
 
   <div class="panel" style="grid-column: 1 / -1; margin-bottom: 8px;">
     <div class="row">
@@ -162,6 +211,7 @@ console.log(snap.data()); // { name: 'Ada' }</code></pre>
 
   <div class="panel">
     <div class="row">
+      <label class="sr-only" for="method">HTTP method</label>
       <select id="method">
         <option>POST</option>
         <option>GET</option>
@@ -169,19 +219,22 @@ console.log(snap.data()); // { name: 'Ada' }</code></pre>
         <option>PATCH</option>
         <option>DELETE</option>
       </select>
-      <input id="collection" placeholder="collection" value="users" />
-      <input id="docId" placeholder="doc id (blank = auto, list on GET)" value="ada" />
+      <label class="sr-only" for="collection">Collection name</label>
+      <input id="collection" placeholder="collection" value="users" aria-label="Collection name" />
+      <label class="sr-only" for="docId">Document id</label>
+      <input id="docId" placeholder="doc id (blank = auto, list on GET)" value="ada" aria-label="Document id (blank = auto, list on GET)" />
     </div>
-    <textarea id="body">{"name":"Ada","balance":100}</textarea>
+    <label class="sr-only" for="body">Request body (JSON)</label>
+    <textarea id="body" aria-label="Request body (JSON)">{"name":"Ada","balance":100}</textarea>
     <div class="row" style="margin-top:8px;">
-      <button id="sendBtn">Send</button>
-      <button class="ghost" id="listBtn">List collection</button>
-      <button class="ghost" id="statsBtn">Refresh colony stats</button>
+      <button id="sendBtn" disabled>Send</button>
+      <button class="ghost" id="listBtn" disabled>List collection</button>
+      <button class="ghost" id="statsBtn" disabled>Refresh colony stats</button>
     </div>
   </div>
 
   <div class="panel">
-    <div id="output">// responses appear here</div>
+    <div id="output" aria-live="polite">// responses appear here</div>
   </div>
 </section>
 
@@ -223,6 +276,7 @@ $('newKeyBtn').onclick = async () => {
   const body = await res.json();
   apiKey = body.apiKey;
   $('apiKeyBox').textContent = apiKey;
+  for (const id of ['sendBtn', 'listBtn', 'statsBtn']) $(id).disabled = false;
 };
 
 async function call(method, path, body) {
@@ -261,16 +315,24 @@ async function refreshColony() {
     const div = document.createElement('div');
     div.className = 'shard';
     const routeKeys = Object.keys(body.pheromone).filter((k) => k.endsWith(`#shard${shard.id}`));
-    div.innerHTML = `<h4>shard ${shard.id}</h4>` + shard.replicas.map((r) => {
-      const pheromoneEntries = routeKeys.map((k) => body.pheromone[k][r.id]).filter((v) => v !== undefined);
-      const strength = pheromoneEntries.length ? pheromoneEntries[0].toFixed(2) : '0.50';
-      return `<div class="replica">
-        <span><span class="pill ${r.alive ? 'alive' : 'dead'}">${r.alive ? 'alive' : 'dead'}</span>
-        &nbsp;${r.id} &middot; ${r.docCount} docs &middot; ~${r.baseLatencyMs}ms &middot; pheromone ${strength}</span>
-        <span>
-          <button class="ghost" onclick="failReplica('${r.id}')">fail</button>
-          <button class="ghost" onclick="healReplica('${r.id}')">heal</button>
-        </span>
+    const rawStrengths = shard.replicas.map((r) => {
+      const entries = routeKeys.map((k) => body.pheromone[k][r.id]).filter((v) => v !== undefined);
+      return entries.length ? entries[0] : 0.5;
+    });
+    const maxStrength = Math.max(...rawStrengths, 0.001);
+    div.innerHTML = `<h4>shard ${shard.id}</h4>` + shard.replicas.map((r, i) => {
+      const strength = rawStrengths[i];
+      const scale = Math.max(0.04, strength / maxStrength).toFixed(3);
+      return `<div class="replica ${r.alive ? '' : 'dead'}">
+        <div class="replica-top">
+          <span><span class="pill ${r.alive ? 'alive' : 'dead'}">${r.alive ? 'alive' : 'dead'}</span>
+          &nbsp;${r.id} &middot; ${r.docCount} docs &middot; ~${r.baseLatencyMs}ms &middot; pheromone ${strength.toFixed(2)}</span>
+          <span>
+            <button class="ghost" onclick="failReplica('${r.id}')" aria-label="Fail replica ${r.id}">fail</button>
+            <button class="ghost" onclick="healReplica('${r.id}')" aria-label="Heal replica ${r.id}">heal</button>
+          </span>
+        </div>
+        <div class="pbar-track"><div class="pbar-fill" style="transform:scaleX(${scale})"></div></div>
       </div>`;
     }).join('');
     view.appendChild(div);
