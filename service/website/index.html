@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AntSQL Cloud</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0b0d0f;
+    --panel: #14171a;
+    --panel-2: #1b1f23;
+    --border: #262b30;
+    --text: #e7ecef;
+    --muted: #9aa5ad;
+    --accent: #ff8a3d;
+    --accent-2: #ffb066;
+    --good: #4ade80;
+    --bad: #f87171;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+  a { color: var(--accent-2); }
+  header {
+    padding: 20px clamp(16px, 5vw, 64px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  nav a { margin-left: 20px; color: var(--muted); text-decoration: none; font-size: 0.92rem; }
+  nav a:hover { color: var(--text); }
+
+  .hero { padding: clamp(32px, 8vw, 96px) clamp(16px, 5vw, 64px) 32px; max-width: 980px; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0 0 16px; letter-spacing: -0.02em; }
+  .hero p { color: var(--muted); font-size: 1.15rem; max-width: 620px; }
+  .hero .tag { display: inline-block; font-size: 0.8rem; color: var(--accent-2); border: 1px solid var(--accent); border-radius: 999px; padding: 4px 12px; margin-bottom: 18px; }
+
+  section { padding: 28px clamp(16px, 5vw, 64px); max-width: 1080px; }
+  h2 { font-size: 1.4rem; margin-bottom: 6px; }
+  .sub { color: var(--muted); margin-top: 0; margin-bottom: 20px; }
+
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+  }
+  code { font-family: var(--mono); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 8px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .card h3 { margin: 0 0 8px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+  #playground { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { #playground { grid-template-columns: 1fr; } }
+  textarea, input, select, button {
+    font-family: var(--mono);
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.86rem;
+  }
+  textarea { width: 100%; min-height: 90px; resize: vertical; }
+  button { cursor: pointer; background: var(--accent); color: #1a0e02; font-weight: 700; border: none; }
+  button:hover { background: var(--accent-2); }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .row select, .row input { flex: 1; min-width: 100px; }
+  #output { white-space: pre-wrap; word-break: break-word; min-height: 220px; max-height: 420px; overflow-y: auto; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+  .pill.alive { background: rgba(74,222,128,0.15); color: var(--good); }
+  .pill.dead { background: rgba(248,113,113,0.15); color: var(--bad); }
+  #colony .shard { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  #colony .shard h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
+  #colony .replica { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.86rem; }
+  #colony .replica button { padding: 2px 8px; font-size: 0.72rem; }
+  #apiKeyBox { font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
+  footer { padding: 32px clamp(16px, 5vw, 64px); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot"></span> AntSQL Cloud</div>
+  <nav>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#playground">Playground</a>
+    <a href="#colony">Live colony</a>
+    <a href="#api">API</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <div class="tag">ant-colony adaptive routing, not a mock</div>
+  <h1>A document database that heals itself.</h1>
+  <p>
+    Firestore-simple to use — collections, documents, one API key, no schema,
+    no ops. Underneath, every read is routed by a real pheromone-based ant
+    colony algorithm across replicated shards: it learns which replica is
+    fastest, and reroutes around failures on its own, with no coordinator
+    ever recomputing a plan.
+  </p>
+</div>
+
+<section id="quickstart">
+  <h2>Quickstart</h2>
+  <p class="sub">One key, one script. No dashboard sign-up flow.</p>
+  <pre><code>curl -X POST http://localhost:4280/v1/keys
+# {"apiKey":"ant_...")}
+
+curl -X POST http://localhost:4280/v1/db/users \
+  -H "Authorization: Bearer ant_..." \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ada","balance":100}'
+# {"id":"...","name":"Ada","balance":100}</code></pre>
+
+  <p class="sub" style="margin-top:20px;">Or from JS (Node or the browser) with the bundled SDK:</p>
+  <pre><code>import { AntSQL } from './sdk/antsql-client.js';
+
+const apiKey = await AntSQL.createKey('http://localhost:4280');
+const db = new AntSQL({ apiKey, baseUrl: 'http://localhost:4280' });
+
+const ref  = await db.collection('users').add({ name: 'Ada' });
+const snap = await db.collection('users').doc(ref.id).get();
+console.log(snap.data()); // { name: 'Ada' }</code></pre>
+
+  <div class="grid">
+    <div class="card"><h3>Schemaless</h3><p>Documents are plain JSON. No migrations, no column types.</p></div>
+    <div class="card"><h3>Self-healing reads</h3><p>Every read tries the ant colony's current favorite replica first, and transparently falls back if it's down.</p></div>
+    <div class="card"><h3>One key = one namespace</h3><p>Every API key is its own isolated database. No cross-tenant collisions.</p></div>
+    <div class="card"><h3>Durable</h3><p>Every write is appended to a write-ahead log per replica before it's acknowledged.</p></div>
+  </div>
+</section>
+
+<section id="playground">
+  <h2>Playground</h2>
+  <p class="sub">Talks to this server directly — nothing here is faked.</p>
+
+  <div class="panel" style="grid-column: 1 / -1; margin-bottom: 8px;">
+    <div class="row">
+      <button id="newKeyBtn">Generate API key</button>
+      <span id="apiKeyBox">no key yet — click "Generate API key"</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <select id="method">
+        <option>POST</option>
+        <option>GET</option>
+        <option selected>PUT</option>
+        <option>PATCH</option>
+        <option>DELETE</option>
+      </select>
+      <input id="collection" placeholder="collection" value="users" />
+      <input id="docId" placeholder="doc id (blank = auto, list on GET)" value="ada" />
+    </div>
+    <textarea id="body">{"name":"Ada","balance":100}</textarea>
+    <div class="row" style="margin-top:8px;">
+      <button id="sendBtn">Send</button>
+      <button class="ghost" id="listBtn">List collection</button>
+      <button class="ghost" id="statsBtn">Refresh colony stats</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="output">// responses appear here</div>
+  </div>
+</section>
+
+<section id="colony">
+  <h2>Live colony</h2>
+  <p class="sub">Shards, replicas, and the pheromone trail the router has learned for each. Fail a replica and watch reads route around it.</p>
+  <div class="panel">
+    <div id="colonyView">click "Refresh colony stats" above once you have a key</div>
+  </div>
+</section>
+
+<section id="api">
+  <h2>API reference</h2>
+  <pre><code>POST   /v1/keys                        create an API key (no auth)
+
+GET    /v1/db/:collection              list documents
+POST   /v1/db/:collection              create with a generated id
+GET    /v1/db/:collection/:id          read one document
+PUT    /v1/db/:collection/:id          create or replace
+PATCH  /v1/db/:collection/:id          merge fields
+DELETE /v1/db/:collection/:id          delete
+
+GET    /v1/_colony/stats               shard/replica health + pheromone
+POST   /v1/_colony/replicas/:id/fail   simulate a replica outage
+POST   /v1/_colony/replicas/:id/heal   bring it back (auto-resyncs)
+
+All /v1/db and /v1/_colony routes require: Authorization: Bearer &lt;apiKey&gt;</code></pre>
+</section>
+
+<footer>AntSQL Cloud — built on the same pheromone-routing engine as AntSQL's C++ research core.</footer>
+
+<script>
+let apiKey = null;
+const $ = (id) => document.getElementById(id);
+const out = (data) => { $('output').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); };
+
+$('newKeyBtn').onclick = async () => {
+  const res = await fetch('/v1/keys', { method: 'POST' });
+  const body = await res.json();
+  apiKey = body.apiKey;
+  $('apiKeyBox').textContent = apiKey;
+};
+
+async function call(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { Authorization: `Bearer ${apiKey}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  try { return { status: res.status, body: JSON.parse(text) }; } catch { return { status: res.status, body: text }; }
+}
+
+$('sendBtn').onclick = async () => {
+  if (!apiKey) return out('Generate an API key first.');
+  const method = $('method').value;
+  const collection = $('collection').value.trim();
+  const id = $('docId').value.trim();
+  let body;
+  try { body = $('body').value.trim() ? JSON.parse($('body').value) : undefined; }
+  catch (e) { return out('Body is not valid JSON: ' + e.message); }
+  const path = id ? `/v1/db/${collection}/${id}` : `/v1/db/${collection}`;
+  out(await call(method, path, ['POST', 'PUT', 'PATCH'].includes(method) ? body : undefined));
+};
+
+$('listBtn').onclick = async () => {
+  if (!apiKey) return out('Generate an API key first.');
+  out(await call('GET', `/v1/db/${$('collection').value.trim()}`));
+};
+
+async function refreshColony() {
+  if (!apiKey) return out('Generate an API key first.');
+  const { body } = await call('GET', '/v1/_colony/stats');
+  const view = $('colonyView');
+  view.innerHTML = '';
+  for (const shard of body.shards) {
+    const div = document.createElement('div');
+    div.className = 'shard';
+    const routeKeys = Object.keys(body.pheromone).filter((k) => k.endsWith(`#shard${shard.id}`));
+    div.innerHTML = `<h4>shard ${shard.id}</h4>` + shard.replicas.map((r) => {
+      const pheromoneEntries = routeKeys.map((k) => body.pheromone[k][r.id]).filter((v) => v !== undefined);
+      const strength = pheromoneEntries.length ? pheromoneEntries[0].toFixed(2) : '0.50';
+      return `<div class="replica">
+        <span><span class="pill ${r.alive ? 'alive' : 'dead'}">${r.alive ? 'alive' : 'dead'}</span>
+        &nbsp;${r.id} &middot; ${r.docCount} docs &middot; ~${r.baseLatencyMs}ms &middot; pheromone ${strength}</span>
+        <span>
+          <button class="ghost" onclick="failReplica('${r.id}')">fail</button>
+          <button class="ghost" onclick="healReplica('${r.id}')">heal</button>
+        </span>
+      </div>`;
+    }).join('');
+    view.appendChild(div);
+  }
+}
+window.failReplica = async (id) => { await call('POST', `/v1/_colony/replicas/${id}/fail`); refreshColony(); };
+window.healReplica = async (id) => { await call('POST', `/v1/_colony/replicas/${id}/heal`); refreshColony(); };
+$('statsBtn').onclick = refreshColony;
+</script>
+
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "antsql-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AntSQL Cloud: a Firestore-simple document database backed by ant-colony adaptive replica routing.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/server.test.js test/sdk.test.js test/rateLimit.test.js"
+  },
+  "license": "UNLICENSED"
+}
