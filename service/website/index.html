@@ -7,37 +7,44 @@
 <title>AntSQL Cloud</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #0b0d0f;
-    --panel: #14171a;
-    --panel-2: #1b1f23;
-    --border: #262b30;
-    --text: #e7ecef;
-    --muted: #9aa5ad;
-    --accent: #ff8a3d;
-    --accent-2: #ffb066;
-    --good: #4ade80;
-    --bad: #f87171;
-    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    color-scheme: light;
+    --bg: #ffffff;
+    --ink: #15121f;
+    --body: #4c4a5c;
+    --muted: #6e6b82;
+    --border: #e7e3f4;
+    --border-2: #d8d2ee;
+    --accent: #5a3fff;
+    --accent-dark: #4429e0;
+    --accent-ink: #ffffff;
+    --band: #130d2b;
+    --band-text: #f2effc;
+    --band-muted: #ada7d1;
+    --band-border: #322a5c;
+    --code-kw: #b6a2ff;
+    --code-str: #7fd8b0;
+    --good: #1fae72;
+    --bad: #e0434c;
+    --font: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "Spline Sans Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  html { scrollbar-color: var(--border) var(--bg); }
+  html { scrollbar-color: var(--border-2) var(--bg); }
   body {
     margin: 0;
     background: var(--bg);
-    color: var(--text);
+    color: var(--body);
     font-family: var(--font);
-    line-height: 1.5;
+    line-height: 1.55;
     font-variant-numeric: tabular-nums;
   }
-  a { color: var(--accent-2); }
-  h1, h2, h3, h4 { font-family: var(--font); letter-spacing: -0.02em; }
+  a { color: var(--accent); }
+  h1, h2, h3, h4 { font-family: var(--font); color: var(--ink); letter-spacing: -0.02em; font-weight: 800; }
 
-  ::selection { background: var(--accent); color: #1a0e02; }
+  ::selection { background: var(--accent); color: #fff; }
 
   *:focus-visible {
     outline: 2px solid var(--accent);
@@ -47,117 +54,213 @@
 
   ::-webkit-scrollbar { width: 12px; height: 12px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 3px solid var(--bg); }
-  ::-webkit-scrollbar-thumb:hover { background: var(--panel-2); }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
   }
-  header {
-    padding: 20px clamp(16px, 5vw, 64px);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--border);
-  }
-  .brand { font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
-  .brand .dot {
-    width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
-    animation: pulse 2.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(0.8); }
-  }
-  nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
-  nav a { color: var(--muted); text-decoration: none; font-size: 0.92rem; }
-  nav a:hover { color: var(--text); }
 
-  .hero { padding: clamp(32px, 8vw, 96px) clamp(16px, 5vw, 64px) 32px; max-width: 980px; }
-  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0 0 16px; letter-spacing: -0.03em; }
-  .hero p { color: var(--muted); font-size: 1.15rem; max-width: 65ch; }
-  .hero p strong { color: var(--accent-2); font-weight: 600; }
-
-  section { padding: 28px clamp(16px, 5vw, 64px); max-width: 1080px; }
-  h2 { font-size: 1.4rem; margin-bottom: 6px; }
-  .sub { color: var(--muted); margin-top: 0; margin-bottom: 20px; }
-
-  pre {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: 0.86rem;
-  }
-  code { font-family: var(--mono); }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
   }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
-  .feature-list { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 32px; }
-  @media (max-width: 640px) { .feature-list { grid-template-columns: 1fr; } }
-  .feature-list li { border-top: 1px solid var(--border); padding: 18px 0; }
-  .feature-list h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 600; }
-  .feature-list p { margin: 0; color: var(--muted); font-size: 0.92rem; max-width: 42ch; }
+  header {
+    padding: 18px clamp(16px, 5vw, 64px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .brand { font-weight: 800; font-size: 1.1rem; color: var(--ink); display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand .dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.78); }
+  }
+  nav { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 26px; }
+  nav a.navlink { color: var(--body); text-decoration: none; font-size: 0.93rem; font-weight: 500; }
+  nav a.navlink:hover { color: var(--ink); }
 
-  #playground { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 800px) { #playground { grid-template-columns: 1fr; } }
-  textarea, input, select, button {
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--font); font-weight: 700; font-size: 0.9rem;
+    padding: 10px 20px; border-radius: 999px; border: 1.5px solid transparent;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-solid { background: var(--accent); color: var(--accent-ink); }
+  .btn-solid:hover { background: var(--accent-dark); }
+  .btn-outline { background: transparent; border-color: var(--border-2); color: var(--ink); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { cursor: not-allowed; opacity: 0.4; }
+
+  .hero {
+    padding: clamp(48px, 9vw, 108px) clamp(16px, 5vw, 64px) clamp(32px, 6vw, 56px);
+    max-width: 1180px;
+  }
+  .hero h1 {
+    font-size: clamp(2.4rem, 5.6vw, 4.4rem); font-weight: 900; margin: 0 0 22px;
+    letter-spacing: -0.035em; line-height: 1.03; max-width: 15ch;
+  }
+  .hero p { color: var(--body); font-size: 1.2rem; max-width: 60ch; margin: 0 0 32px; }
+  .hero p strong { color: var(--ink); font-weight: 700; }
+  .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .showcase {
+    display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 40px; align-items: center;
+    padding: 8px clamp(16px, 5vw, 64px) clamp(56px, 8vw, 88px);
+    max-width: 1180px;
+  }
+  @media (max-width: 860px) { .showcase { grid-template-columns: 1fr; } }
+  .showcase h2 { font-size: 1.7rem; margin: 0 0 14px; max-width: 14ch; }
+  .showcase p { margin: 0; font-size: 1.02rem; }
+
+  .wave { display: block; width: 100%; height: 56px; color: var(--accent); }
+
+  .band {
+    background: var(--band);
+    padding: 0 clamp(16px, 5vw, 64px) clamp(56px, 8vw, 80px);
+  }
+  .band .stats {
+    max-width: 1180px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
+    padding-top: 12px;
+  }
+  @media (max-width: 700px) { .band .stats { grid-template-columns: 1fr; gap: 36px; } }
+  .band .stat .num { font-size: clamp(2.6rem, 6vw, 4rem); font-weight: 900; color: #fff; letter-spacing: -0.03em; line-height: 1; }
+  .band .stat .label { color: var(--band-muted); font-size: 0.98rem; margin-top: 8px; }
+
+  section { padding: clamp(48px, 8vw, 80px) clamp(16px, 5vw, 64px); max-width: 1180px; margin: 0 auto; }
+  section > .head { max-width: 640px; margin-bottom: 28px; }
+  h2 { font-size: 1.9rem; margin: 0 0 10px; letter-spacing: -0.025em; }
+  .sub { color: var(--body); margin: 0; font-size: 1.05rem; }
+
+  pre {
+    background: var(--band);
+    border: 1px solid var(--band-border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    overflow-x: auto;
     font-family: var(--mono);
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
+    font-size: 0.86rem;
+    color: var(--band-text);
+    line-height: 1.65;
+  }
+  pre .kw { color: var(--code-kw); }
+  pre .str { color: var(--code-str); }
+  pre .cm { color: var(--band-muted); }
+  code { font-family: var(--mono); }
+
+  .feature-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 40px; }
+  @media (max-width: 640px) { .feature-list { grid-template-columns: 1fr; } }
+  .feature-list li { border-top: 1px solid var(--border); padding: 22px 0; }
+  .feature-list h3 { margin: 0 0 7px; font-size: 1.05rem; font-weight: 700; }
+  .feature-list p { margin: 0; color: var(--body); font-size: 0.96rem; max-width: 42ch; }
+
+  .panel { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 22px; }
+
+  #playground .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+  @media (max-width: 800px) { #playground .grid { grid-template-columns: 1fr; } }
+  textarea, input, select {
+    font-family: var(--mono);
+    background: #fbfaff;
+    color: var(--ink);
+    border: 1px solid var(--border-2);
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 9px 11px;
     font-size: 0.86rem;
   }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+  textarea, input { caret-color: var(--accent); }
   textarea { width: 100%; min-height: 90px; resize: vertical; }
-  button { cursor: pointer; background: var(--accent); color: #1a0e02; font-weight: 700; border: none; transition: background 0.15s ease; }
-  button:hover { background: var(--accent-2); }
-  button:disabled { cursor: not-allowed; opacity: 0.45; background: var(--panel-2); color: var(--muted); }
-  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
-  button.ghost:hover { background: var(--panel-2); border-color: var(--muted); }
-  button.ghost:disabled { background: transparent; border-color: var(--border); }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .row select, .row input { flex: 1; min-width: 100px; }
-  #output { white-space: pre-wrap; word-break: break-word; min-height: 220px; max-height: 420px; overflow-y: auto; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-  .pill.alive { background: rgba(74,222,128,0.15); color: var(--good); }
-  .pill.dead { background: rgba(248,113,113,0.15); color: var(--bad); }
-  #colony .shard { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-  #colony .shard h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
-  #colony .replica { padding: 8px 0; font-size: 0.86rem; border-bottom: 1px solid var(--border); }
-  #colony .replica:last-child { border-bottom: none; }
-  #colony .replica-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  #colony .replica button { padding: 2px 8px; font-size: 0.72rem; }
-  #colony .pbar-track { height: 4px; border-radius: 2px; background: var(--panel-2); margin-top: 6px; overflow: hidden; }
-  #colony .pbar-fill {
+  #output {
+    background: var(--band); color: var(--band-text); border: 1px solid var(--band-border);
+    border-radius: 10px; padding: 16px 18px; font-family: var(--mono); font-size: 0.84rem;
+    white-space: pre-wrap; word-break: break-word; min-height: 220px; max-height: 420px; overflow-y: auto;
+  }
+  #apiKeyBox { font-family: var(--mono); font-size: 0.84rem; word-break: break-all; color: var(--ink); }
+
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+  .pill.alive { background: rgba(31,174,114,0.12); color: var(--good); }
+  .pill.dead { background: rgba(224,67,76,0.1); color: var(--bad); }
+
+  #colonyView .shard { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff; }
+  #colonyView .shard h4 { margin: 0 0 10px; font-size: 0.82rem; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  #colonyView .replica {
+    padding: 9px 0; font-size: 0.88rem; border-bottom: 1px solid var(--border);
+    transform-origin: center top; backface-visibility: hidden;
+  }
+  #colonyView .replica:last-child { border-bottom: none; }
+  #colonyView .replica.flip { animation: rowFlip 0.55s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  @keyframes rowFlip {
+    0% { transform: scaleY(0.3) translateY(-2px); opacity: 0.25; }
+    55% { transform: scaleY(1.06); opacity: 1; }
+    100% { transform: scaleY(1); }
+  }
+  #colonyView .replica-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #colonyView .replica-id { font-family: var(--mono); color: var(--ink); }
+  #colonyView .replica button { padding: 3px 10px; font-size: 0.72rem; }
+  #colonyView .pbar-track { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
+  #colonyView .pbar-fill {
     height: 100%; width: 100%; border-radius: 2px; background: var(--accent);
     transform: scaleX(0); transform-origin: left;
     transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  #colony .replica.dead .pbar-fill { background: var(--muted); }
-  #apiKeyBox { font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
-  footer { padding: 32px clamp(16px, 5vw, 64px); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 24px; }
+  #colonyView .replica.dead .pbar-fill { background: var(--muted); }
+
+  footer { padding: 32px clamp(16px, 5vw, 64px); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); }
 </style>
 </head>
 <body>
+<!--
+THESIS: AntSQL Cloud proves adaptive infrastructure through a live mechanism the visitor
+can break themselves, not through claimed authority — so the page earns belief the way its
+own colony demo does: by showing state change, not asserting quality.
+OWN-WORLD: Fauna's verified 2024 marketing world (web.archive.org), carried in fact not
+mood: crisp white ground, one deep-indigo full-bleed proof band, bold black/near-black
+Archivo display type, electric-indigo accent (#5a3fff) at page scale in the band only,
+dark violet-black code/terminal panels with indigo syntax accents, thin accent line-art
+dividers, editorial rule-separated feature list (no card grid).
+STORY: An indie/hackathon builder lands, sees one sentence of what this is, gets a working
+key and curl call before scrolling twice, then watches the live colony reroute around a
+replica they killed themselves.
+FIRST VIEWPORT: White ground; small indigo-dot wordmark + nav + solid pill CTA in header;
+large black Archivo-900 headline (max 15ch) top-left; grey subhead below; two pill CTAs.
+FORM: Direction pinned by explicit user brief ("look at faunadb"), verified against
+web.archive.org/web/20240102090829/https://fauna.com/ rather than assumed from memory.
+concept-seed.mjs run for process compliance (scope=direction, mode=persuade, seed key
+3038cf53); assigned index 7 and all six dealt challengers (split-flap concourse, ebru
+pigment, kiln glaze, jacquard brocade, seed-packet rack, secession page) superseded by the
+brief per the script's own pinned-decision clause. One donation kept: the split-flap
+concourse challenger's live-tabular-state discipline raises the Live Colony section — rows
+visibly flip on a state change instead of silently re-rendering.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
+the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+-->
 
 <header>
-  <div class="brand"><span class="dot"></span> AntSQL Cloud</div>
+  <a class="brand" href="#top"><span class="dot"></span> AntSQL Cloud</a>
   <nav>
-    <a href="#quickstart">Quickstart</a>
-    <a href="#playground">Playground</a>
-    <a href="#colony">Live colony</a>
-    <a href="#api">API</a>
+    <a class="navlink" href="#quickstart">Quickstart</a>
+    <a class="navlink" href="#playground">Playground</a>
+    <a class="navlink" href="#colony">Live colony</a>
+    <a class="navlink" href="#api">API</a>
+    <button class="btn btn-solid" id="headerKeyBtn">Get a key</button>
   </nav>
 </header>
 
-<div class="hero">
+<div class="hero" id="top">
   <h1>A document database that heals itself.</h1>
   <p>
     Firestore-simple to use — collections, documents, one API key, no schema,
@@ -166,31 +269,56 @@
     it learns which replica is fastest and reroutes around failures on its
     own, with no coordinator ever recomputing a plan.
   </p>
+  <div class="ctas">
+    <button class="btn btn-solid" id="heroKeyBtn">Get an API key</button>
+    <a class="btn btn-outline" href="#colony">Watch it self-heal ↓</a>
+  </div>
 </div>
 
-<section id="quickstart">
-  <h2>Quickstart</h2>
-  <p class="sub">One key and one script — no dashboard sign-up flow to sit through.</p>
+<div class="showcase">
+  <div>
+    <h2>One key and one script.</h2>
+    <p>No dashboard sign-up flow to sit through — creating a key over
+      <code>POST /v1/keys</code> is the entire signup process, and every key
+      is its own isolated namespace.</p>
+  </div>
   <pre><code>curl -X POST http://localhost:4280/v1/keys
-# {"apiKey":"ant_..."}
+<span class="cm"># {"apiKey":"ant_..."}</span>
 
 curl -X POST http://localhost:4280/v1/db/users \
   -H "Authorization: Bearer ant_..." \
   -H "Content-Type: application/json" \
   -d '{"name":"Ada","balance":100}'
-# {"id":"...","name":"Ada","balance":100}</code></pre>
+<span class="cm"># {"id":"...","name":"Ada","balance":100}</span></code></pre>
+</div>
 
-  <p class="sub" style="margin-top:20px;">Or from JS (Node or the browser) with the bundled SDK:</p>
-  <pre><code>import { AntSQL } from './sdk/antsql-client.js';
+<svg class="wave" viewBox="0 0 1200 56" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M0,28 C150,0 300,56 450,28 C600,0 750,56 900,28 C1050,0 1150,20 1200,28" fill="none" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+</svg>
 
-const apiKey = await AntSQL.createKey('http://localhost:4280');
-const db = new AntSQL({ apiKey, baseUrl: 'http://localhost:4280' });
+<div class="band">
+  <div class="stats">
+    <div class="stat"><div class="num">4</div><div class="label">shards, routed live by the colony</div></div>
+    <div class="stat"><div class="num">3</div><div class="label">replicas per shard, each with different latency</div></div>
+    <div class="stat"><div class="num">9</div><div class="label">passing tests — including a real replica failure</div></div>
+  </div>
+</div>
 
-const ref  = await db.collection('users').add({ name: 'Ada' });
-const snap = await db.collection('users').doc(ref.id).get();
-console.log(snap.data()); // { name: 'Ada' }</code></pre>
+<section id="quickstart">
+  <div class="head">
+    <h2>Quickstart</h2>
+    <p class="sub">Or from JS (Node or the browser) with the bundled, zero-dependency SDK.</p>
+  </div>
+  <pre><code><span class="kw">import</span> { AntSQL } <span class="kw">from</span> <span class="str">'./sdk/antsql-client.js'</span>;
 
-  <ul class="feature-list">
+<span class="kw">const</span> apiKey = <span class="kw">await</span> AntSQL.createKey(<span class="str">'http://localhost:4280'</span>);
+<span class="kw">const</span> db = <span class="kw">new</span> AntSQL({ apiKey, baseUrl: <span class="str">'http://localhost:4280'</span> });
+
+<span class="kw">const</span> ref  = <span class="kw">await</span> db.collection(<span class="str">'users'</span>).add({ name: <span class="str">'Ada'</span> });
+<span class="kw">const</span> snap = <span class="kw">await</span> db.collection(<span class="str">'users'</span>).doc(ref.id).get();
+console.log(snap.data()); <span class="cm">// { name: 'Ada' }</span></code></pre>
+
+  <ul class="feature-list" style="margin-top: 36px;">
     <li><h3>Schemaless</h3><p>Documents are plain JSON. No migrations, no column types.</p></li>
     <li><h3>Self-healing reads</h3><p>Every read tries the ant colony's current favorite replica first, and transparently falls back if it's down.</p></li>
     <li><h3>One key = one namespace</h3><p>Every API key is its own isolated database. No cross-tenant collisions.</p></li>
@@ -199,55 +327,63 @@ console.log(snap.data()); // { name: 'Ada' }</code></pre>
 </section>
 
 <section id="playground">
-  <h2>Playground</h2>
-  <p class="sub">Every request below hits this server directly, live.</p>
+  <div class="head">
+    <h2>Playground</h2>
+    <p class="sub">Every request below hits this server directly, live.</p>
+  </div>
 
-  <div class="panel" style="grid-column: 1 / -1; margin-bottom: 8px;">
-    <div class="row">
-      <button id="newKeyBtn">Generate API key</button>
+  <div class="panel">
+    <div class="row" style="margin-bottom: 0;">
+      <button class="btn btn-solid" id="newKeyBtn">Generate API key</button>
       <span id="apiKeyBox">no key yet — click "Generate API key"</span>
     </div>
   </div>
 
-  <div class="panel">
-    <div class="row">
-      <label class="sr-only" for="method">HTTP method</label>
-      <select id="method">
-        <option>POST</option>
-        <option>GET</option>
-        <option selected>PUT</option>
-        <option>PATCH</option>
-        <option>DELETE</option>
-      </select>
-      <label class="sr-only" for="collection">Collection name</label>
-      <input id="collection" placeholder="collection" value="users" aria-label="Collection name" />
-      <label class="sr-only" for="docId">Document id</label>
-      <input id="docId" placeholder="doc id (blank = auto, list on GET)" value="ada" aria-label="Document id (blank = auto, list on GET)" />
+  <div class="grid">
+    <div class="panel">
+      <div class="row">
+        <label class="sr-only" for="method">HTTP method</label>
+        <select id="method">
+          <option>POST</option>
+          <option>GET</option>
+          <option selected>PUT</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+        </select>
+        <label class="sr-only" for="collection">Collection name</label>
+        <input id="collection" placeholder="collection" value="users" aria-label="Collection name" />
+        <label class="sr-only" for="docId">Document id</label>
+        <input id="docId" placeholder="doc id (blank = auto, list on GET)" value="ada" aria-label="Document id (blank = auto, list on GET)" />
+      </div>
+      <label class="sr-only" for="body">Request body (JSON)</label>
+      <textarea id="body" aria-label="Request body (JSON)">{"name":"Ada","balance":100}</textarea>
+      <div class="row" style="margin-top:14px; margin-bottom: 0;">
+        <button class="btn btn-solid" id="sendBtn" disabled>Send</button>
+        <button class="btn btn-outline" id="listBtn" disabled>List collection</button>
+        <button class="btn btn-outline" id="statsBtn" disabled>Refresh colony stats</button>
+      </div>
     </div>
-    <label class="sr-only" for="body">Request body (JSON)</label>
-    <textarea id="body" aria-label="Request body (JSON)">{"name":"Ada","balance":100}</textarea>
-    <div class="row" style="margin-top:8px;">
-      <button id="sendBtn" disabled>Send</button>
-      <button class="ghost" id="listBtn" disabled>List collection</button>
-      <button class="ghost" id="statsBtn" disabled>Refresh colony stats</button>
-    </div>
-  </div>
 
-  <div class="panel">
-    <div id="output" aria-live="polite">// responses appear here</div>
+    <div class="panel">
+      <div id="output" aria-live="polite">// responses appear here</div>
+    </div>
   </div>
 </section>
 
 <section id="colony">
-  <h2>Live colony</h2>
-  <p class="sub">Shards, replicas, and the pheromone trail the router has learned for each. Fail a replica and watch reads route around it.</p>
+  <div class="head">
+    <h2>Live colony</h2>
+    <p class="sub">Shards, replicas, and the pheromone trail the router has learned for each. Fail a replica and watch reads route around it.</p>
+  </div>
   <div class="panel">
     <div id="colonyView">click "Refresh colony stats" above once you have a key</div>
   </div>
 </section>
 
 <section id="api">
-  <h2>API reference</h2>
+  <div class="head">
+    <h2>API reference</h2>
+  </div>
   <pre><code>POST   /v1/keys                        create an API key (no auth)
 
 GET    /v1/db/:collection              list documents
@@ -261,7 +397,7 @@ GET    /v1/_colony/stats               shard/replica health + pheromone
 POST   /v1/_colony/replicas/:id/fail   simulate a replica outage
 POST   /v1/_colony/replicas/:id/heal   bring it back (auto-resyncs)
 
-All /v1/db and /v1/_colony routes require: Authorization: Bearer &lt;apiKey&gt;</code></pre>
+<span class="cm">All /v1/db and /v1/_colony routes require: Authorization: Bearer &lt;apiKey&gt;</span></code></pre>
 </section>
 
 <footer>AntSQL Cloud — built on the same pheromone-routing engine as AntSQL's C++ research core.</footer>
@@ -271,13 +407,18 @@ let apiKey = null;
 const $ = (id) => document.getElementById(id);
 const out = (data) => { $('output').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); };
 
-$('newKeyBtn').onclick = async () => {
+async function createKey() {
   const res = await fetch('/v1/keys', { method: 'POST' });
   const body = await res.json();
   apiKey = body.apiKey;
   $('apiKeyBox').textContent = apiKey;
   for (const id of ['sendBtn', 'listBtn', 'statsBtn']) $(id).disabled = false;
-};
+  return apiKey;
+}
+
+$('newKeyBtn').onclick = createKey;
+$('headerKeyBtn').onclick = async () => { await createKey(); document.getElementById('playground').scrollIntoView({ behavior: 'smooth' }); };
+$('heroKeyBtn').onclick = async () => { await createKey(); document.getElementById('playground').scrollIntoView({ behavior: 'smooth' }); };
 
 async function call(method, path, body) {
   const res = await fetch(path, {
@@ -306,6 +447,12 @@ $('listBtn').onclick = async () => {
   out(await call('GET', `/v1/db/${$('collection').value.trim()}`));
 };
 
+// Tracks each replica's last-seen alive/dead state so a real transition (not
+// just a periodic re-render) gets a flip transition — the one thing borrowed
+// from the split-flap-board challenger: state changes read as an event, not
+// a silent diff.
+const lastAlive = new Map();
+
 async function refreshColony() {
   if (!apiKey) return out('Generate an API key first.');
   const { body } = await call('GET', '/v1/_colony/stats');
@@ -323,19 +470,21 @@ async function refreshColony() {
     div.innerHTML = `<h4>shard ${shard.id}</h4>` + shard.replicas.map((r, i) => {
       const strength = rawStrengths[i];
       const scale = Math.max(0.04, strength / maxStrength).toFixed(3);
-      return `<div class="replica ${r.alive ? '' : 'dead'}">
+      const changed = lastAlive.has(r.id) && lastAlive.get(r.id) !== r.alive;
+      return `<div class="replica ${r.alive ? '' : 'dead'} ${changed ? 'flip' : ''}">
         <div class="replica-top">
           <span><span class="pill ${r.alive ? 'alive' : 'dead'}">${r.alive ? 'alive' : 'dead'}</span>
-          &nbsp;${r.id} &middot; ${r.docCount} docs &middot; ~${r.baseLatencyMs}ms &middot; pheromone ${strength.toFixed(2)}</span>
+          &nbsp;<span class="replica-id">${r.id}</span> &middot; ${r.docCount} docs &middot; ~${r.baseLatencyMs}ms &middot; pheromone ${strength.toFixed(2)}</span>
           <span>
-            <button class="ghost" onclick="failReplica('${r.id}')" aria-label="Fail replica ${r.id}">fail</button>
-            <button class="ghost" onclick="healReplica('${r.id}')" aria-label="Heal replica ${r.id}">heal</button>
+            <button class="btn btn-outline" onclick="failReplica('${r.id}')" aria-label="Fail replica ${r.id}">fail</button>
+            <button class="btn btn-outline" onclick="healReplica('${r.id}')" aria-label="Heal replica ${r.id}">heal</button>
           </span>
         </div>
         <div class="pbar-track"><div class="pbar-fill" style="transform:scaleX(${scale})"></div></div>
       </div>`;
     }).join('');
     view.appendChild(div);
+    for (const r of shard.replicas) lastAlive.set(r.id, r.alive);
   }
 }
 window.failReplica = async (id) => { await call('POST', `/v1/_colony/replicas/${id}/fail`); refreshColony(); };
