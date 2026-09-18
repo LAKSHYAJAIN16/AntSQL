@@ -2,15 +2,11 @@
 
 > A federated SQL gateway that routes queries using ant-colony pheromone feedback instead of a static routing table.
 
-I built this for edge and multi-site PostgreSQL shards. `sim/` is the Python simulator where I designed and validated the algorithm; `engine/` is the C++23 production-routing core built on top of that research; `service/` is a separate deployable product applying the same algorithm to a document database.
+Static routing tables don't adapt when a shard degrades; pheromone feedback does. That's the whole bet behind AntSQL, aimed at edge and multi-site PostgreSQL shards. `sim/` is the Python simulator used to design and validate the algorithm; `engine/` is the C++23 production-routing core built on top of that research; `service/` is a separate deployable product applying the same algorithm to a document database.
 
 ## `engine/`: the C++ routing core
 
-`Router` does local pheromone route selection, cost-sensitive success feedback, failure penalties, evaporation, exploration, and loop prevention — thread-safe, so one instance handles concurrent route decisions from multiple connections. Two `IForwarder` implementations exist: an in-process one for dependency-free tests, and `TcpForwarder`/`TcpServer` which forwards the same routing contract over real TCP sockets (Winsock on Windows), so multi-process/multi-machine routing and failure behavior work today without gRPC or Arrow Flight SQL.
-
-`SimpleSqlParser` is a real (deliberately narrow) `ISqlParser` — hand-written recursive descent over single-table SELECT/INSERT/UPDATE/DELETE with at most one integer-equality distribution-key predicate, standing in for a real PostgreSQL-grammar parser.
-
-`TableStoreExecutor` is a real embedded storage engine, not a test fake: each table is an in-memory map from integer distribution key to a row of named columns, mirrored to an append-only WAL so data survives a restart. `Gateway::Execute` measures real wall-clock latency at both the leaf and hop call sites, so the router's cost-sensitive feedback is cost-sensitive end to end, not just in the Python simulator.
+`Router` handles local pheromone route selection — cost-sensitive success feedback, failure penalties, evaporation, exploration, loop prevention — and is thread-safe, so one instance serves concurrent connections. Routing can go in-process (for dependency-free tests) or over real TCP (`TcpForwarder`/`TcpServer`, Winsock on Windows), so multi-process/multi-machine routing and failure behavior work today without gRPC or Arrow Flight SQL. A hand-written recursive-descent `SimpleSqlParser` covers single-table SELECT/INSERT/UPDATE/DELETE with one integer-equality distribution-key predicate, standing in for a real PostgreSQL-grammar parser. `TableStoreExecutor` is a real embedded storage engine (in-memory table + append-only WAL, survives a restart), and `Gateway::Execute` measures real wall-clock latency at both leaf and hop, so the router's cost-sensitive feedback is cost-sensitive end to end, not just in the Python simulator.
 
 Build and run the tests:
 
