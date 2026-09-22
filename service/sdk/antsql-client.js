@@ -3,7 +3,8 @@
 // AntSQL Cloud SDK — zero dependencies, works in the browser or Node
 // (anything with global fetch). Deliberately shaped like Firestore's
 // client API: db.collection(x).doc(y).get()/set()/update()/delete(),
-// db.collection(x).add(), db.collection(x).list().
+// db.collection(x).add(), db.collection(x).list(), and queries:
+// db.collection(x).where('age', '>=', 21).orderBy('age').limit(10).get().
 //
 //   const db = new AntSQL({ apiKey: 'ant_...' });
 //   const ref = await db.collection('users').add({ name: 'Ada' });
@@ -41,10 +42,56 @@ class DocRef {
   }
 }
 
-class CollectionRef {
-  constructor(client, collection) {
+// Immutable query builder: each method returns a new Query, so a base
+// query can be reused and extended without surprising aliasing.
+class Query {
+  constructor(client, collection, spec = { where: [], orderBy: null, dir: 'asc', limit: null, startAfter: null }) {
     this._client = client;
     this.collection = collection;
+    this._spec = spec;
+  }
+
+  _with(changes) {
+    return new Query(this._client, this.collection, { ...this._spec, ...changes });
+  }
+
+  where(field, op, value) {
+    return this._with({ where: [...this._spec.where, `${field}${op}${JSON.stringify(value)}`] });
+  }
+
+  orderBy(field, dir = 'asc') {
+    return this._with({ orderBy: field, dir });
+  }
+
+  limit(n) {
+    return this._with({ limit: n });
+  }
+
+  // Pass the nextCursor from a previous page (or a document id).
+  startAfter(cursor) {
+    return this._with({ startAfter: cursor });
+  }
+
+  // Returns { docs: [{ id, ...fields }], nextCursor } — nextCursor is null
+  // on the last page, otherwise pass it to startAfter() for the next one.
+  async get() {
+    const params = new URLSearchParams();
+    for (const clause of this._spec.where) params.append('where', clause);
+    if (this._spec.orderBy) {
+      params.set('orderBy', this._spec.orderBy);
+      params.set('dir', this._spec.dir);
+    }
+    if (this._spec.limit !== null) params.set('limit', String(this._spec.limit));
+    if (this._spec.startAfter !== null) params.set('startAfter', this._spec.startAfter);
+    const qs = params.toString();
+    const res = await this._client._request('GET', `/v1/db/${this.collection}${qs ? `?${qs}` : ''}`);
+    return this._client._json(res);
+  }
+}
+
+class CollectionRef extends Query {
+  constructor(client, collection) {
+    super(client, collection);
   }
 
   doc(id) {
@@ -57,10 +104,11 @@ class CollectionRef {
     return new DocRef(this._client, this.collection, body.id);
   }
 
+  // Every document in the collection (up to the server's 1000-per-page
+  // cap; use where/orderBy/limit/startAfter to page through more).
   async list() {
-    const res = await this._client._request('GET', `/v1/db/${this.collection}`);
-    const body = await this._client._json(res);
-    return body.docs;
+    const { docs } = await this.get();
+    return docs;
   }
 }
 

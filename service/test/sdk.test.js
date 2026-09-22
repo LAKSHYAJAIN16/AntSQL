@@ -71,3 +71,28 @@ test('SDK surfaces the colony status for the dashboard', async () => {
   assert.ok(Array.isArray(stats.shards));
   assert.ok(stats.shards.length > 0);
 });
+
+test('SDK queries: where, orderBy, limit, and cursor pagination end to end', async () => {
+  const apiKey = await AntSQL.createKey(BASE_URL);
+  const db = new AntSQL({ apiKey, baseUrl: BASE_URL });
+  const people = db.collection('people');
+  for (const [name, age, city] of [['Ada', 36, 'London'], ['Grace', 85, 'New York'], ['Linus', 21, 'Helsinki'], ['Barbara', 21, 'New York']]) {
+    await people.add({ name, age, city });
+  }
+
+  // A value with a space and a + sign must survive URL encoding.
+  const nyc = await people.where('city', '==', 'New York').orderBy('age').get();
+  assert.deepEqual(nyc.docs.map((d) => d.name), ['Barbara', 'Grace']);
+
+  const adults = await people.where('age', '>', 21).orderBy('age', 'desc').get();
+  assert.deepEqual(adults.docs.map((d) => d.name), ['Grace', 'Ada']);
+
+  const byName = people.orderBy('name').limit(3);
+  const first = await byName.get();
+  assert.deepEqual(first.docs.map((d) => d.name), ['Ada', 'Barbara', 'Grace']);
+  const second = await byName.startAfter(first.nextCursor).get();
+  assert.deepEqual(second.docs.map((d) => d.name), ['Linus']);
+  assert.equal(second.nextCursor, null);
+
+  await assert.rejects(() => people.limit(0).get(), /limit/);
+});
