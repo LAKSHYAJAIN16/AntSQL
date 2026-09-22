@@ -13,7 +13,8 @@ add_library(antsql_router
   engine/src/sql.cpp
   engine/src/simple_sql_parser.cpp
   engine/src/wire.cpp
-  engine/src/tcp_forwarder.cpp)
+  engine/src/tcp_forwarder.cpp
+  engine/src/table_store_executor.cpp)
 target_include_directories(antsql_router PUBLIC engine/include)
 if(WIN32)
   target_link_libraries(antsql_router PUBLIC ws2_32)
@@ -26,8 +27,12 @@ add_executable(antsql_router_tests
   engine/tests/sql_test.cpp
   engine/tests/simple_sql_parser_test.cpp
   engine/tests/wire_test.cpp
-  engine/tests/tcp_forwarder_test.cpp)
+  engine/tests/tcp_forwarder_test.cpp
+  engine/tests/table_store_executor_test.cpp)
 target_link_libraries(antsql_router_tests PRIVATE antsql_router)
+
+add_executable(antsql_colony_demo engine/src/colony_demo_main.cpp)
+target_link_libraries(antsql_colony_demo PRIVATE antsql_router)
 
 enable_testing()
 add_test(NAME antsql_router_tests COMMAND antsql_router_tests)
