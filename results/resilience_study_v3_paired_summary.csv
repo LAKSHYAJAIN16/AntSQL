@@ -1,0 +1,6 @@
+churn_rate,n_pairs,mean_static_centralized,mean_adaptive_centralized,mean_decentralized_greedy,mean_antsql,gap_antsql_minus_adaptive_centralized_mean,gap_antsql_minus_adaptive_centralized_se,gap_antsql_minus_adaptive_centralized_ci95_lo,gap_antsql_minus_adaptive_centralized_ci95_hi,gap_antsql_minus_adaptive_centralized_excludes_zero,gap_antsql_minus_decentralized_greedy_mean,gap_antsql_minus_decentralized_greedy_se,gap_antsql_minus_decentralized_greedy_ci95_lo,gap_antsql_minus_decentralized_greedy_ci95_hi,gap_antsql_minus_decentralized_greedy_excludes_zero
+0.0,20,1.0,1.0,0.9885,0.9935,-0.0065,0.0033,-0.0131,0.0001,False,0.005,0.0036,-0.002,0.012,False
+0.05,20,0.7005,0.8583,0.7307,0.8558,-0.0025,0.0053,-0.0128,0.0079,False,0.1252,0.0141,0.0975,0.1529,True
+0.1,20,0.5431,0.7715,0.592,0.7832,0.0117,0.0056,0.0008,0.0227,True,0.1913,0.0144,0.163,0.2195,True
+0.2,20,0.3328,0.5306,0.3778,0.566,0.0354,0.0067,0.0222,0.0486,True,0.1882,0.0193,0.1504,0.2259,True
+0.3,20,0.3049,0.5422,0.3513,0.5956,0.0534,0.0074,0.0388,0.068,True,0.2443,0.0242,0.1969,0.2917,True
