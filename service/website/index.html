@@ -386,7 +386,10 @@ console.log(snap.data()); <span class="cm">// { name: 'Ada' }</span></code></pre
   </div>
   <pre><code>POST   /v1/keys                        create an API key (no auth)
 
-GET    /v1/db/:collection              list documents
+GET    /v1/db/:collection              list / query documents
+       ?where=age>=21&where=city==NYC  filters (== != &lt; &lt;= &gt; &gt;=, dotted paths ok)
+       &orderBy=age&dir=desc&limit=20  sort + page size (max 1000)
+       &startAfter=&lt;nextCursor&gt;         next page
 POST   /v1/db/:collection              create with a generated id
 GET    /v1/db/:collection/:id          read one document
 PUT    /v1/db/:collection/:id          create or replace
@@ -394,8 +397,11 @@ PATCH  /v1/db/:collection/:id          merge fields
 DELETE /v1/db/:collection/:id          delete
 
 GET    /v1/_colony/stats               shard/replica health + pheromone
-POST   /v1/_colony/replicas/:id/fail   simulate a replica outage
+POST   /v1/_colony/replicas/:id/fail   simulate an outage (only for your key)
 POST   /v1/_colony/replicas/:id/heal   bring it back (auto-resyncs)
+
+DELETE /v1/keys                        revoke your key
+GET    /sdk/antsql-client.js           the zero-dependency JS SDK
 
 <span class="cm">All /v1/db and /v1/_colony routes require: Authorization: Bearer &lt;apiKey&gt;</span></code></pre>
 </section>

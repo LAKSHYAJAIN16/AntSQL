@@ -112,8 +112,15 @@ class CollectionRef extends Query {
   }
 }
 
+// Loaded via <script src="https://<host>/sdk/antsql-client.js">, default
+// to that host; in Node (or when inlined) fall back to a local server.
+const DEFAULT_BASE_URL =
+  typeof document !== 'undefined' && document.currentScript && document.currentScript.src
+    ? new URL(document.currentScript.src).origin
+    : 'http://localhost:4280';
+
 class AntSQL {
-  constructor({ apiKey, baseUrl = 'http://localhost:4280' } = {}) {
+  constructor({ apiKey, baseUrl = DEFAULT_BASE_URL } = {}) {
     if (!apiKey) throw new Error('AntSQL requires an apiKey — create one with AntSQL.createKey(baseUrl)');
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -155,7 +162,7 @@ class AntSQL {
   }
 
   // Static helper: no signup form, just ask the server for a key.
-  static async createKey(baseUrl = 'http://localhost:4280') {
+  static async createKey(baseUrl = DEFAULT_BASE_URL) {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/keys`, { method: 'POST' });
     const { apiKey } = await res.json();
     return apiKey;

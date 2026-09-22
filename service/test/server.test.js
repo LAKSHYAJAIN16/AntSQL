@@ -224,3 +224,10 @@ test('health check responds without auth', async () => {
   const res = await fetch(`${BASE_URL}/healthz`);
   assert.equal(res.status, 200);
 });
+
+test('serves the SDK from the host', async () => {
+  const res = await fetch(`${BASE_URL}/sdk/antsql-client.js`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /javascript/);
+  assert.match(await res.text(), /class AntSQL/);
+});

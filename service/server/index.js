@@ -12,6 +12,7 @@ const { parseQuery, applyQuery } = require('./query');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4280;
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
 const WEBSITE_DIR = path.join(__dirname, '..', 'website');
+const SDK_PATH = path.join(__dirname, '..', 'sdk', 'antsql-client.js');
 
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES) || 256 * 1024;
 // Behind a hosting proxy (Fly, Railway, Render) every request's socket
@@ -146,6 +147,20 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/healthz') {
     return sendJson(res, 200, { ok: true });
+  }
+
+  // Served from the host itself so a browser app can just
+  // <script src="https://<host>/sdk/antsql-client.js">.
+  if (req.method === 'GET' && url.pathname === '/sdk/antsql-client.js') {
+    return fs.readFile(SDK_PATH, (err, contents) => {
+      if (err) return sendJson(res, 500, { error: 'sdk unavailable' });
+      res.writeHead(200, {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=300',
+      });
+      res.end(contents);
+    });
   }
 
   // Signing up IS creating a key: no email, no account, no approval step.
