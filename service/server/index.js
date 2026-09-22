@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { Colony } = require('./colony');
 const { KeyStore } = require('./auth');
 const { RateLimiter } = require('./rateLimit');
+const { parseQuery, applyQuery } = require('./query');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4280;
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
@@ -209,8 +210,9 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 201, { id: newId, ...body });
         }
         if (req.method === 'GET' && !id) {
+          const query = parseQuery(url.searchParams);
           const docs = await colony.list(apiKey, collection);
-          return sendJson(res, 200, { docs });
+          return sendJson(res, 200, applyQuery(docs, query));
         }
         if (req.method === 'PUT' && id) {
           const body = (await readBody(req)) || {};
@@ -247,6 +249,7 @@ const server = http.createServer(async (req, res) => {
         QUOTA_EXCEEDED: 403,
         BODY_TOO_LARGE: 413,
         INVALID_BODY: 400,
+        INVALID_QUERY: 400,
       }[err.code] || 500;
       return sendJson(res, status, { error: err.message });
     }
