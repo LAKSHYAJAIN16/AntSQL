@@ -58,6 +58,42 @@ This is a concise project history, preserved alongside the source tree.
   hop budgets. Reported honestly in the paper as a null result rather than
   dropped: the hop-budget/multi-hop-fragility hypothesis is not confirmed,
   and the churn-0.30 interaction is still unexplained.
+- Found the actual cause of the noise that swamped the hop-budget sweep,
+  and it turned out to reopen the paper's central claim: `experiment.run_sweep`
+  and `run_failure_mode_ablation.py` both derive each trial's seed from a
+  hash that includes `strategy_name`, so every strategy in every sweep so
+  far (including the main resilience study) drew an independently-random
+  topology/shard-placement/workload/churn schedule even "at the same
+  trial" — none of it was ever paired. Wrote `run_hop_budget_sweep.py` to
+  derive its seed from `(churn_rate, trial)` only instead (all strategies
+  and hop budgets at a trial now share one environment) and reran it: the
+  gap resolved into a clean, monotonic, mostly-significant curve — AntSQL
+  significantly worse than adaptive-centralized at hop budget 4-6,
+  significantly better from 10 up, opposite direction from the original
+  multi-hop-fragility hypothesis (budget starvation, not path-length
+  fragility, per `paper/antsql_paper.md` §7). At hop budget 15 — the main
+  study's default — the paired gap was positive at churn 0.30, contradicting
+  the main study's unpaired finding that AntSQL loses there. That was
+  reason enough to rerun the main resilience study itself paired
+  (`sim/run_resilience_study_paired.py`, same 14-node/10-shard/400-tick/
+  20-seed/5-churn-rate config as `resilience_study_v2.csv`, seed keyed only
+  on `(churn_rate, trial)`). It reverses the churn-0.30 reversal: AntSQL
+  ties adaptive-centralized at churn 0.00-0.05 and is significantly ahead
+  at 0.10/0.20/0.30 (growing, not bounded), confirmed by a near-perfect
+  r≈0.99 correlation between the two strategies' paired outcomes (almost
+  all per-run variance is a shared-environment effect that pairing is
+  designed to cancel, not strategy-specific noise). Checked for a mundane
+  explanation before trusting this (no code changes to the simulator core
+  since v2 was generated per git history; every RNG use is a seeded
+  per-instance `numpy.random.default_rng`, not global state, so no
+  cross-run contamination) — found none, so the discrepancy is attributed
+  to attempt 2's unpaired design, not a bug. Rewrote the paper's abstract,
+  §5 (results), §6 (now "three attempts at this result, and why the third
+  is trusted"), §7 (framing), §8, and §9 accordingly. Raw data:
+  `results/hop_budget_sweep_paired.csv` and `results/resilience_study_v3_paired.csv`;
+  summaries alongside each. The per-failure-mode ablation (§7) still uses
+  the unpaired seeding and has not been rerun — flagged in §8-9 as the
+  next thing to redo before trusting its specific margins.
 - Attempted TCP connection reuse in `TcpForwarder` (cache one socket per
   neighbor instead of connecting fresh every call) to reduce handshake
   overhead. A new test caught a real bug: `TcpServer` closes the connection

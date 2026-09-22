@@ -11,27 +11,39 @@ requests over existing durable databases rather than replacing storage
 engines. A discrete-event simulator compares AntSQL against three controls:
 static centralized routing, periodically adaptive centralized routing, and
 decentralized greedy routing without persistent reinforcement. Across 20
-seeds per condition on a 14-node topology, AntSQL beats the decentralized
-greedy ablation at every churn rate tested (e.g. 0.665 vs. 0.385 success rate
-at churn 0.20), isolating persistent stigmergic credit assignment as the
-source of its advantage rather than decentralization alone. Against the
-adaptive-centralized baseline, AntSQL shows a **crossover window**, not a
-monotonic advantage: it loses on stable networks and matches or beats
-adaptive-centralized coordination in an intermediate churn band (roughly
-0.10-0.20), but loses again at the most severe churn rate tested (0.30),
-where the centralized baseline's completion degrades more gracefully than
-AntSQL's. A per-failure-mode ablation isolating each churn arm finds that no
-single arm reproduces this reversal — adaptive-centralized does not beat
-AntSQL on any arm run alone — so it must be an interaction effect rather
-than any one disruption type; a follow-up sweep of AntSQL's routing hop
-budget, the most obvious candidate mechanism, did not confirm a hop-budget
-explanation either, so the specific interaction remains an open question.
-These results sharpen, and partly revise, an earlier 3-seed preliminary
-result that reported a monotonic AntSQL advantage
-at high churn. They remain preliminary: variance is high at severe churn
-even at 20 seeds,
-the simulator abstracts SQL execution as shard reachability and path cost,
-and no PostgreSQL-backed gateway validation exists yet.
+paired seeds per churn rate on a 14-node topology — every strategy run
+against the identical topology, shard placement, workload, and churn
+schedule at a given trial, not an independently-drawn one — AntSQL beats
+the decentralized greedy ablation at every non-zero churn rate tested (e.g.
+0.566 vs. 0.378 success rate at churn 0.20), isolating persistent
+stigmergic credit assignment as the source of its advantage rather than
+decentralization alone. Against the adaptive-centralized baseline, AntSQL
+ties at low churn (0.00-0.05) and shows a statistically resolved,
+**monotonically growing** advantage from churn 0.10 through the most severe
+rate tested (0.30: +0.053 success-rate points, 95% CI [0.039, 0.068]) — not
+the bounded crossover window this paper previously reported. That earlier
+finding (a reversal in AntSQL's favor at intermediate churn that flipped
+back against it at churn 0.30) came from a 20-seed study whose seeding let
+every strategy draw an independent environment even "at the same trial";
+once seeds are paired so all strategies share one environment per trial,
+the reversal does not replicate, and a near-perfect correlation
+(r ≈ 0.99) between AntSQL's and adaptive-centralized's paired outcomes
+confirms most of the original study's apparent high-churn variance was
+uncontrolled environmental noise, not strategy-specific behavior. A
+per-failure-mode ablation and a hop-budget sweep, both undertaken to
+explain the now-unreplicated reversal, still surfaced two findings that
+stand on their own: adaptation (centralized or stigmergic) specifically
+helps under shard migration, and AntSQL's success rate is disproportionately
+sensitive to a tight routing hop budget, likely because its local,
+exploration-driven walk needs more hops on average than a centrally-computed
+shortest path. These results revise, for the second time, an earlier
+3-seed preliminary result — landing closer to that result's original
+monotonic-advantage shape, but via a corrected methodology rather than a
+lucky small sample. They remain preliminary: the failure-mode ablation is
+still unpaired, per-environment variance is high even with pairing
+controlling its cross-strategy component, the simulator abstracts SQL
+execution as shard reachability and path cost, and no PostgreSQL-backed
+gateway validation exists yet.
 
 ## 1. Introduction
 
@@ -44,13 +56,17 @@ can retain useful routing knowledge long enough to improve availability during
 coordination-disrupting churn.
 
 AntSQL is not proposed as a universally faster router. The hypothesis is
-conditional and, as the results below show, narrower than originally framed:
-decentralized stigmergic routing trades steady-state path quality for
-completion advantage over centralized coordination only within a bounded
-churn band, not for all churn beyond some threshold. It also is not
-proposed as evidence that decentralization alone helps: an ablation without
-persistent reinforcement is required to separate that claim from the
-specific mechanism AntSQL contributes.
+conditional: decentralized stigmergic routing trades steady-state path
+quality for a completion advantage over centralized coordination that
+holds at moderate-to-severe churn but not on a stable network, where
+AntSQL and adaptive-centralized routing are statistically indistinguishable
+(§5). An earlier analysis of this same simulator reported that advantage as
+a *bounded* churn band that reversed at the most severe rate tested; §6
+explains why that reversal turned out to be an artifact of an unpaired
+experimental design rather than a real property of the system. It also is
+not proposed as evidence that decentralization alone helps: an ablation
+without persistent reinforcement is required to separate that claim from
+the specific mechanism AntSQL contributes.
 
 ## 2. Background and positioning
 
@@ -144,74 +160,159 @@ prediction not yet tested here (see §9).
 ## 5. Results
 
 The current resilience study uses 14 nodes, 10 shards, 400 ticks, 20
-deterministic seeds per condition, and five churn rates. This supersedes an
-earlier 3-seed, 4-churn-rate study; the two are not fully consistent with
-each other at the highest shared churn rate, which is itself informative
-about how much the small-sample result was noise (§6).
+paired seeds per churn rate, and five churn rates. "Paired" means the seed
+for a given (churn rate, trial) does not depend on which strategy is being
+run: all four strategies at trial *i* execute against the identical
+topology, shard placement, workload arrival stream, and churn schedule,
+differing only in routing strategy. This supersedes an unpaired 20-seed
+study (`results/resilience_study_v2.csv`), which itself superseded an
+earlier 3-seed study; §6 covers why the unpaired study's headline finding —
+a reversal at the highest churn rate — does not survive pairing, and is
+the more interesting methodological story. Raw data:
+`results/resilience_study_v3_paired.csv`; summary:
+`results/resilience_study_v3_paired_summary.csv`.
 
 | Churn | Static central. | Adaptive central. | Decentralized greedy | AntSQL |
 | ---: | ---: | ---: | ---: | ---: |
-| 0.00 | 1.000 ± 0.000 | 1.000 ± 0.000 | 0.988 ± 0.003 | 0.994 ± 0.008 |
-| 0.05 | 0.637 ± 0.136 | 0.826 ± 0.085 | 0.680 ± 0.155 | 0.779 ± 0.131 |
-| 0.10 | 0.509 ± 0.177 | 0.660 ± 0.192 | 0.542 ± 0.113 | **0.702 ± 0.168** |
-| 0.20 | 0.372 ± 0.096 | 0.533 ± 0.223 | 0.385 ± 0.137 | **0.665 ± 0.146** |
-| 0.30 | 0.297 ± 0.108 | 0.514 ± 0.181 | 0.289 ± 0.083 | 0.377 ± 0.225 |
+| 0.00 | 1.000 | 1.000 | 0.989 | 0.994 |
+| 0.05 | 0.701 | 0.858 | 0.731 | 0.856 |
+| 0.10 | 0.543 | 0.772 | 0.592 | **0.783** |
+| 0.20 | 0.333 | 0.531 | 0.378 | **0.566** |
+| 0.30 | 0.305 | 0.542 | 0.351 | **0.596** |
 
-Success rate, mean ± standard deviation across n = 20 seeds. Bold marks
-churn rates where AntSQL's mean exceeds the adaptive-centralized mean.
+Success rate, mean across n = 20 paired trials. Bold marks churn rates
+where AntSQL's paired advantage over adaptive-centralized is statistically
+resolved (95% CI on the mean paired difference excludes zero; see below).
 
-Three findings follow from this table:
+| Churn | AntSQL − adaptive (paired) | 95% CI | AntSQL − greedy (paired) | 95% CI |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.00 | -0.007 | [-0.013, +0.000] | +0.005 | [-0.002, +0.012] |
+| 0.05 | -0.003 | [-0.013, +0.008] | +0.125 | [+0.098, +0.153] |
+| 0.10 | +0.012 | [+0.001, +0.023] | +0.191 | [+0.163, +0.220] |
+| 0.20 | +0.035 | [+0.022, +0.049] | +0.188 | [+0.150, +0.226] |
+| 0.30 | +0.053 | [+0.039, +0.068] | +0.244 | [+0.197, +0.292] |
 
-- **The greedy ablation is decisively beaten at every churn rate above
-  zero.** AntSQL beats decentralized-greedy routing by 0.10-0.28 success-rate
-  points at every non-zero churn rate (e.g. 0.702 vs. 0.542 at churn 0.10;
-  0.665 vs. 0.385 at churn 0.20; 0.377 vs. 0.289 at churn 0.30). Since both
-  conditions are equally decentralized and differ only in whether routing
-  decisions carry a persistent, evaporating trail, this isolates stigmergic
-  credit assignment specifically as the source of AntSQL's advantage, not
+Three findings follow:
+
+- **The greedy ablation is decisively beaten at every non-zero churn
+  rate, more clearly than before.** The paired gap (0.125-0.244) is larger
+  and every interval excludes zero at churn ≥ 0.05. Since both conditions
+  are equally decentralized and differ only in whether routing decisions
+  carry a persistent, evaporating trail, this isolates stigmergic credit
+  assignment specifically as the source of AntSQL's advantage, not
   decentralization in general.
-- **The crossover against adaptive-centralized routing is a window, not a
-  one-sided advantage at high churn.** AntSQL matches or beats
-  adaptive-centralized routing in an intermediate band (churn 0.10-0.20) but
-  loses at both the stable end (churn 0.00-0.05) and the most severe churn
-  rate tested (0.30, 0.377 vs. 0.514). A centralized coordinator that can
-  still complete a full gather-recompute-redistribute cycle occasionally
-  during even severe churn appears to recover better than AntSQL's purely
-  local, budget-limited hop search once churn is frequent enough to also
-  repeatedly disrupt AntSQL's in-flight multi-hop attempts. This is a
-  materially different, more cautious claim than the original 3-seed study's
-  apparent monotonic AntSQL advantage above churn 0.10 (§6).
-- **AntSQL's advantage, where it exists, is not a latency or overhead
-  advantage.** At every churn rate, AntSQL has worse p90 path cost and
-  higher control overhead than adaptive-centralized routing (full metrics in
-  `results/resilience_study_v2_summary.csv` and `results/resilience_study_v2.csv`).
-  The claim under test is availability/completion during coordination
-  disruption, not universal performance.
+- **Against adaptive-centralized routing, AntSQL ties at low churn and
+  shows a growing, statistically resolved advantage from churn 0.10
+  onward — not a bounded crossover window.** The gap is not significant at
+  churn 0.00-0.05 (both intervals include zero), then becomes positive and
+  significant at 0.10, 0.20, and 0.30, increasing monotonically with churn
+  (+0.012 → +0.035 → +0.053). There is no reversal at the highest churn
+  rate tested. §6 explains why an earlier unpaired run of this same
+  comparison found the opposite at churn 0.30.
+- **AntSQL's advantage, where it exists, is still not a latency or
+  overhead advantage.** At every churn rate, AntSQL has worse p90 path cost
+  (e.g. 99.8 vs. 49.0 at churn 0.30) and higher control overhead (0.294 vs.
+  0.168) than adaptive-centralized routing. The claim under test is
+  availability/completion during coordination disruption, not universal
+  performance; this part of the picture is unchanged by pairing.
 
-## 6. What changed from the preliminary 3-seed study, and why that matters
+## 6. Three attempts at this result, and why the third one is trusted
 
-An earlier study (3 seeds, churn rates 0.00/0.05/0.10/0.20 only) reported
-AntSQL beating adaptive-centralized routing at churn 0.20 by a wide margin
-(0.690 vs. 0.457). The 20-seed rerun at the same churn rate found a smaller
-but still real gap (0.665 vs. 0.533) — consistent in direction, but with a
-much narrower margin and a large standard deviation on the adaptive-
-centralized side (± 0.223) that the 3-seed study could not have detected.
-Extending the sweep to churn 0.30, absent from the original study, reversed
-the direction of the comparison entirely (0.377 vs. 0.514). Neither number
-in the original table was wrong as a measurement, but three seeds were not
-enough to support a claim about the general shape of the crossover, and the
-absence of a churn-0.30 arm meant the original study could not have
-noticed the reversal at all. This is reported here as a methodological
-finding in its own right: at this node count and churn range, per-seed
-variance is large enough (std comparable to or larger than the gap between
-conditions at churn ≥ 0.20) that conclusions about "which condition wins at
-high churn" require either many more seeds or a variance-reduction approach
-before they can be treated as more than directional.
+This comparison has now been run three ways, and each rerun changed the
+conclusion. That is reported here as a finding in its own right, not
+buried as revision history, because the reason the second attempt was
+wrong is a general lesson about simulation methodology, not a fact specific
+to AntSQL.
+
+**Attempt 1 (3 seeds, churn 0.00/0.05/0.10/0.20 only).** Reported AntSQL
+beating adaptive-centralized routing at churn 0.20 by a wide margin (0.690
+vs. 0.457) — a monotonic advantage growing with churn, so far as the swept
+range showed.
+
+**Attempt 2 (20 independent seeds, churn 0.00-0.30, `resilience_study_v2.csv`,
+formerly this section's headline result).** At churn 0.20 it found a
+smaller but still-real gap (0.665 vs. 0.533) — consistent in direction with
+attempt 1, but with a much narrower margin and a large standard deviation
+on the adaptive-centralized side (± 0.223). Extending to churn 0.30, absent
+from attempt 1, reversed the comparison entirely (0.377 vs. 0.514): AntSQL
+behind, not ahead. This was reported as a genuine crossover window — AntSQL
+competitive only at intermediate churn — and motivated the per-failure-mode
+ablation and hop-budget sweep in §7 to explain the reversal.
+
+**Attempt 3 (20 paired seeds, churn 0.00-0.30, §5's table, current
+headline result).** `experiment.run_sweep`, which produced attempt 2,
+derives each trial's seed from a hash that includes `strategy_name`. Every
+strategy therefore drew an independently-generated topology, shard
+placement, workload, and churn schedule even "at the same trial" — none of
+attempt 2's strategy-vs-strategy comparisons were paired, so all of the
+environmental variance documented in attempt 2 (large: std comparable to
+or larger than the gap between conditions at churn ≥ 0.20) landed
+undivided in every gap estimate instead of partly canceling. Attempt 3
+reran the identical configuration with the seed depending only on
+`(churn_rate, trial)`, so all four strategies at a given trial share one
+environment (`run_resilience_study_paired.py`). The result reverses
+attempt 2's reversal: AntSQL statistically ties adaptive-centralized at
+churn 0.00-0.05 and is significantly ahead at 0.10, 0.20, and 0.30, with no
+sign flip anywhere in the swept range (§5).
+
+Two pieces of evidence support trusting attempt 3 over attempt 2, not just
+preferring it because it is newer:
+
+- **Pairing visibly did what it was supposed to.** At churn 0.30, AntSQL's
+  and adaptive-centralized's paired success rates across the 20 shared
+  environments correlate at r ≈ 0.99 — nearly all of each strategy's
+  run-to-run variance is a *shared* environment effect (some churn
+  schedules are hard for every strategy, some are easy for all of them),
+  not strategy-specific noise. Pairing is designed to cancel exactly this
+  component out of the difference, and the resulting standard errors on
+  the paired gap (0.007-0.014) are roughly an order of magnitude tighter
+  than attempt 2's per-strategy standard deviations (0.10-0.23), consistent
+  with that cancellation actually happening rather than being assumed.
+- **The two studies' raw distributions at churn 0.30 look like different
+  populations, and only one design explains why that's expected.** Attempt
+  2's 20 AntSQL success-rate draws at churn 0.30 range from 0.096 to 0.861
+  (mean 0.377, skewed low); attempt 3's 20 draws range from 0.159 to 0.857
+  (mean 0.596, skewed high). Both are legitimate samples from a
+  high-variance, possibly heavy-tailed distribution over random
+  environments — nothing in the code changed between them (verified against
+  git history for `sim/antsql_sim/{simulator,churn,topology,workload,shards}.py`
+  and the routing strategies), and every random draw in the simulator uses
+  an explicit, per-instance `numpy.random.default_rng(seed)`, not global
+  RNG state, so there is no ordering or cross-run contamination to explain
+  the gap either. Two *independent* 20-environment samples landing this far
+  apart is exactly what unpaired sampling of a high-variance quantity can
+  do, and it is indistinguishable, from inside attempt 2 alone, from a real
+  effect — which is the whole problem pairing exists to solve: it does not
+  reduce the true variance of any one strategy's outcome, it correlates the
+  two strategies' draws so the shared component of that variance cancels in
+  the comparison that actually matters.
+
+Neither attempt 1 nor attempt 2 was wrong as a measurement of what it
+measured. Attempt 1 simply didn't have enough seeds or a wide enough churn
+sweep to see the shape of the relationship; attempt 2 had enough seeds to
+look authoritative but an experimental design that let the dominant source
+of variance (the environment) leak into the comparison unpaired. The
+practical lesson, consistent with §8's discussion of the failure-mode
+ablation: at this node count and churn range, per-seed environmental
+variance is large enough that a strategy-vs-strategy conclusion drawn from
+independent samples — however many seeds — should be treated with real
+suspicion until it has been checked under a paired design.
 
 ## 7. Per-failure-mode ablation
 
-Section 6 leaves an open question: which churn arm drives the reversal at
-churn 0.30? We reran each of the five churn arms — node death, node
+*Framing note: this section (and the hop-budget sweep at its end) was
+undertaken to explain a churn-0.30 reversal against adaptive-centralized
+routing that §6 has since traced to an unpaired experimental design and
+found does not replicate under a paired one — so the specific phenomenon
+motivating the question below may never have been real. The ablation's own
+findings (below) do not depend on the reversal being real and are reported
+as-is; the hop-budget sweep's finding, resolved only after being rerun
+paired, stands independently as a real, separate effect (its closing
+discussion explains how it relates to §6).*
+
+The (as it turns out, unpaired) attempt-2 study in §6 leaves an open
+question: which churn arm drives the reversal at churn 0.30? We reran each
+of the five churn arms — node death, node
 revival, shard migration, latency shift, workload shift — in isolation
 (each non-revival arm paired with node revival at an equal rate, so the
 network reaches a dynamic equilibrium instead of monotonically dying, the
@@ -259,29 +360,97 @@ be alive at once) in a way that does not equally disrupt a centralized
 coordinator's single client-to-shard hop once its map happens to be
 current, while shard migration in isolation (which both adaptive
 strategies handle equally well) is not itself the driver. This narrows,
-rather than answers, next steps item (c) in section 9: the open question
-is no longer "which arm" but whether AntSQL's hop budget and multi-hop
-path length specifically explain the compound-churn gap. Raw data:
+rather than answers, the open question from section 6: it is no longer
+"which arm" but whether AntSQL's hop budget and multi-hop path length
+specifically explain the compound-churn gap. Raw data:
 `results/failure_mode_ablation.csv`.
 
-**Update — the hop-budget test was run, and came back inconclusive.** We
-swept `max_query_hops` (the routing walk's hop budget, shared by every
-strategy) over {4, 6, 8, 10, 15, 25} at churn 0.20 and 0.30, 20 seeds,
-comparing only adaptive-centralized and AntSQL. The AntSQL-minus-adaptive
-success-rate gap did not move monotonically with hop budget in either
-direction (churn 0.30: -0.06 at hop budget 4, +0.10 at hop budget 10-15,
-back to -0.03 at hop budget 25) — a pattern that would support the
-multi-hop-fragility hypothesis would show the gap moving in one direction
-as the budget shrinks or grows, not oscillating. Per-cell standard
-deviations (0.10-0.20) are larger than every cross-hop-budget difference in
-the gap, so this specific hypothesis is not confirmed at 20 seeds: either
-hop budget is not the driver, or the effect is real but smaller than the
-noise floor at this seed count. Raw data: `results/hop_budget_sweep.csv`.
-The interaction behind the churn-0.30 reversal (section 6) is therefore
-still unexplained; ruling out one plausible mechanism is itself useful, but
-the next attempt should probably use a variance-reduction design (paired
-seeds across hop-budget values, not independent ones) rather than more
-independent seeds at the same noise floor.
+**Update — the hop-budget test was run, and came back inconclusive at 20
+independent seeds.** We swept `max_query_hops` (the routing walk's hop
+budget, shared by every strategy) over {4, 6, 8, 10, 15, 25} at churn 0.20
+and 0.30, 20 seeds, comparing only adaptive-centralized and AntSQL. The
+AntSQL-minus-adaptive success-rate gap did not move monotonically with hop
+budget in either direction (churn 0.30: -0.06 at hop budget 4, +0.10 at
+hop budget 10-15, back to -0.03 at hop budget 25) — a pattern that would
+support the multi-hop-fragility hypothesis would show the gap moving in
+one direction as the budget shrinks or grows, not oscillating. Per-cell
+standard deviations (0.10-0.20) are larger than every cross-hop-budget
+difference in the gap, so this specific hypothesis was not confirmed at 20
+independent seeds. Raw data: `results/hop_budget_sweep.csv`.
+
+**Update 2 — a paired rerun resolves it, in the opposite direction than
+hypothesized, and reopens section 6.** The independent-seed sweep above
+draws each strategy's topology, shard placement, workload, and churn
+schedule from a seed that also depends on `strategy_name`, so "the same
+trial" for adaptive-centralized and AntSQL was actually two different
+environments — none of it was paired, which is exactly the extra noise
+source the per-cell standard deviations above are consistent with.
+`run_resilience_study_paired.py`'s sibling script reran the identical
+sweep with the seed depending only on `(churn_rate, trial)`, so both
+strategies at a given trial share one environment and the gap becomes a
+matched-pairs difference instead of a difference of independent means:
+
+| Churn | Hop budget | AntSQL − adaptive (paired) | 95% CI | Excludes 0? |
+| ---: | ---: | ---: | ---: | :---: |
+| 0.20 | 4 | -0.104 | [-0.129, -0.079] | yes |
+| 0.20 | 6 | -0.046 | [-0.068, -0.023] | yes |
+| 0.20 | 8 | +0.004 | [-0.013, +0.021] | no |
+| 0.20 | 10 | +0.019 | [+0.002, +0.037] | yes |
+| 0.20 | 15 | +0.029 | [+0.012, +0.047] | yes |
+| 0.20 | 25 | +0.029 | [+0.012, +0.047] | yes |
+| 0.30 | 4 | -0.069 | [-0.094, -0.045] | yes |
+| 0.30 | 6 | -0.026 | [-0.045, -0.008] | yes |
+| 0.30 | 8 | +0.011 | [-0.003, +0.025] | no |
+| 0.30 | 10 | +0.029 | [+0.015, +0.043] | yes |
+| 0.30 | 15 | +0.039 | [+0.025, +0.053] | yes |
+| 0.30 | 25 | +0.039 | [+0.025, +0.053] | yes |
+
+n = 20 paired trials per cell; CI is a normal-approximation 95% interval on
+the mean paired difference, not an independent-samples interval. Raw data:
+`results/hop_budget_sweep_paired.csv`; summary:
+`results/hop_budget_sweep_paired_summary.csv`. hop budget 15 and 25 are
+bit-for-bit identical per trial — expected, since a loop-free walk on a
+14-node topology cannot exceed 13 hops, so both budgets are already
+"effectively unlimited."
+
+Two things follow. First, pairing worked: standard errors here (0.007-0.013)
+are roughly an order of magnitude tighter than the independent-seed run's
+per-cell standard deviations, and the result is now a clean, monotonic,
+mostly-significant curve rather than an oscillation — confirming section
+6's suspicion that the noise floor, not the absence of an effect, was
+hiding it. Second, the effect that was hiding runs the **opposite**
+direction from the multi-hop-fragility hypothesis in section 7's opening
+paragraph: that hypothesis predicted a *tight* hop budget should help
+AntSQL (fewer simultaneously-alive hops required, so more likely to fit
+inside the budget) and a *generous* one should hurt it. The data says the
+reverse — AntSQL is significantly *worse* than adaptive-centralized at hop
+budgets 4 and 6, crosses to no-significant-difference at 8, and is
+significantly *better* from 10 upward, plateauing once the budget stops
+constraining anything. The likely mechanism is budget starvation, not
+path-length fragility: AntSQL's local, exploration-driven walk has no
+global shortest-path knowledge and can wander before finding the owning
+shard, so a tight `max_query_hops` disproportionately cuts off its
+attempts as `RouteExhausted` before a centrally-computed route (which
+already knows the direct path) would run out; once the budget is generous
+enough not to bind, that penalty disappears and AntSQL's adaptivity
+advantage (section 7's shard-migration finding) can show through instead.
+
+This result is what first cast doubt on attempt 2's churn-0.30 reversal
+(§6). The main resilience study's `max_query_hops` is 15 — exactly the
+value at which the row above shows AntSQL *ahead* of adaptive-centralized
+at both churn 0.20 (+0.029) and, notably, churn 0.30 (+0.039 — the churn
+rate where the (now-superseded) attempt-2 study reported AntSQL *behind*
+by -0.137, the finding that motivated this entire investigation). This
+sweep and the attempt-2 study are not the same seeds and are not directly
+interchangeable, but a same-hop-budget paired comparison landing on the
+opposite sign from the unpaired main study — using the same
+variance-reduction technique that had just fixed this section's own
+oscillating result — was reason enough to distrust the unpaired
+churn-0.30 finding rather than the paired one, and to rerun the main
+resilience study itself with paired seeding rather than infer the answer
+by analogy. §6 (attempt 3) reports that rerun: it confirms AntSQL ahead of
+adaptive-centralized at churn 0.30, with no reversal anywhere in the swept
+range.
 
 ## 8. Limitations
 
@@ -291,34 +460,72 @@ or production failure detection. A 1,000-node flat simulation also failed to
 scale: uniform discovery yielded approximately 1% success and near-total
 control overhead. The production architecture therefore requires a
 hierarchical gateway overlay rather than every node learning every shard
-route. Twenty seeds substantially reduced but did not eliminate the variance
-problem described in §6, particularly at churn ≥ 0.20 where standard
-deviations are 15-45% of the mean; the crossover-window claim in §5 should be
-read as directional pending a larger-seed or variance-reduced follow-up. H1's
-predicted scaling of lambda-star with coordinator round-trip time and network
-diameter (§4) has not been tested — the current study fixes both. The
-per-failure-mode ablation (§7) isolates single arms cleanly but cannot rule
-out interaction effects beyond the specific hop-budget hypothesis it
-motivates; a factorial design (pairs and triples of arms run together) would
-be needed to confirm which interaction, specifically, produces the
-churn-0.30 reversal.
+route. H1's predicted scaling of lambda-star with coordinator round-trip
+time and network diameter (§4) has not been tested — the current study
+fixes both.
+
+The per-failure-mode ablation (§7) remains unpaired: `run_failure_mode_ablation.py`
+derives each trial's seed from a hash that includes `strategy_name`, so
+(unlike §5's main resilience study and §7's hop-budget sweep, both now
+paired) every strategy in that table drew an independently-generated
+topology, shard placement, workload, and churn schedule even "at the same
+trial." §6 found that this exact gap was responsible for a reversal that
+did not survive pairing in the main study, so the failure-mode ablation's
+own numbers — reported in §7 largely to answer a question (which arm
+drives the churn-0.30 reversal) that §6 later found may not have had a
+real answer to begin with — should be treated with the same suspicion
+until rerun paired; its qualitative findings that generalize regardless
+(latency/workload shift move nothing; shard migration is where adaptation
+specifically matters) are more likely to survive that rerun than any
+specific success-rate margin in its table. It also isolates single arms
+cleanly but cannot rule out interaction effects among them; a factorial
+design (pairs and triples of arms run together) would be needed for that,
+independent of the pairing fix.
+
+Even with cross-strategy pairing, per-environment variance is still large
+(§6): pairing cancels the *shared* component of that variance out of a
+strategy-vs-strategy comparison, but does not shrink any single strategy's
+own run-to-run variance, which is what a claim about one strategy's
+absolute success rate (rather than a gap between two strategies) would
+need to control. The paired resilience study's standard errors on the
+*gap* (§5) are tight (0.007-0.020), but that is a statement about the
+comparison, not about how tightly any one strategy's own performance is
+pinned down at a given churn rate.
 
 ## 9. Next steps
 
-The immediate research milestones are: (a) a seed count sufficient to bound
-the standard error at the churn rates where the crossover window is
-narrowest, likely 50-100 seeds or a paired/blocked variance-reduction design
-rather than independent seeds — the hop-budget sweep in §7 is a concrete
-example of an effect too small to see at 20 independent seeds; (b) sweeping
-network diameter and simulated coordinator round-trip time to test H1's
-specific prediction that lambda-star moves in the predicted direction, not
-just that a crossover exists somewhere; and (c) since the hop-budget/
-path-length hypothesis from §7 did not pan out at 20 seeds, either rerunning
-it with a paired/variance-reduced design per (a) or, if it still doesn't
-resolve, moving on to a different candidate mechanism for the churn-0.30
-interaction (e.g. specifically the timing of node death relative to an
-in-flight AntSQL routing decision versus a centralized coordinator's most
-recent broadcast, rather than path length per se).
+Items (a) and (c) from the previous version of this section — get a
+variance-reduction design in place, and resolve the hop-budget hypothesis
+under it — are done (§5-7); doing them reopened the question they were
+meant to help answer, so the immediate research milestones have changed:
+
+- **Rerun the per-failure-mode ablation (§7) paired.** It is the one table
+  in this paper still using the unpaired seeding that §6 showed produces
+  spurious reversals; until it's rerun with `(churn_rate, arm, trial)`-only
+  seeding, its specific success-rate margins (as opposed to its qualitative
+  latency/workload/shard-migration findings, which do not obviously depend
+  on pairing) should be treated as provisional.
+- **Fold paired seeding into `experiment.run_sweep` itself**, rather than
+  leaving it as a property of two one-off scripts
+  (`run_hop_budget_sweep.py`, `run_resilience_study_paired.py`). The
+  unpaired path should probably require an explicit opt-in flag going
+  forward, not be the default, given what it produced here.
+- **Extend the churn sweep past 0.30** now that the paired result shows a
+  *monotonically growing* AntSQL advantage rather than a bounded window —
+  does the advantage keep growing, plateau, or itself eventually reverse at
+  more extreme churn than tested here? The old crossover-window framing
+  made this question moot; the new monotonic one does not.
+- **Attribute the growing paired advantage to a specific mechanism**,
+  rather than resting on the completion-rate numbers alone. §4's H1
+  hypothesis (a coordinator's gather-recompute-redistribute round trip has
+  a fixed latency cost churn can outpace) is consistent with the paired
+  result but untested directly; `mean_recovery_ticks` and
+  `n_never_recovered`, already recorded per trial, are the natural next
+  metrics to check against it.
+- **Sweep network diameter and simulated coordinator round-trip time** to
+  test H1's specific prediction that lambda-star moves in the predicted
+  direction, not just that an advantage exists somewhere (unchanged from
+  the previous version of this list).
 
 On the engineering side, `engine/` now has a real (if deliberately narrow)
 `ISqlParser` implementation, `SimpleSqlParser` — hand-written recursive
