@@ -1,0 +1,43 @@
+# Fly.io config for AntSQL Cloud. Deploy from service/:
+#   fly launch --no-deploy --copy-config   (first time; picks a unique app name)
+#   fly volumes create antsql_data --size 1 --region iad
+#   fly deploy
+app = "antsql-cloud"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/data"
+  # Fly's proxy sets Fly-Client-IP; trust it so the per-IP key-creation
+  # limit applies per user rather than to the proxy.
+  TRUST_PROXY = "1"
+  # Every document lives in memory (and on the volume), so cap each key.
+  MAX_DOCS_PER_KEY = "10000"
+
+[[mounts]]
+  source = "antsql_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Cheapest setting: the machine sleeps when idle and wakes on the next
+  # request (~1-2s cold start). Data is safe on the volume; the colony's
+  # learned pheromone is in memory and relearns within a few reads.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
