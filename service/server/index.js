@@ -12,7 +12,19 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4280;
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '..', 'data');
 const WEBSITE_DIR = path.join(__dirname, '..', 'website');
 
-const colony = new Colony(path.join(DATA_DIR, 'colony'));
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES) || 256 * 1024;
+// Behind a hosting proxy (Fly, Railway, Render) every request's socket
+// address is the proxy's, so per-IP limits would lump all users together.
+// Only trust forwarding headers when told to — otherwise any client could
+// spoof them to dodge the key-creation limit.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+// Collection names and document ids become WAL keys and route keys, so
+// keep them to a boring, unambiguous alphabet.
+const NAME_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+const colony = new Colony(path.join(DATA_DIR, 'colony'), {
+  maxDocsPerTenant: Number(process.env.MAX_DOCS_PER_KEY) || Infinity,
+});
 const keys = new KeyStore(path.join(DATA_DIR, 'keys.json'));
 
 // Per-API-key limit: generous burst, sustained cap well above what the
@@ -23,13 +35,18 @@ const REQUEST_LIMIT = new RateLimiter({
   capacity: Number(process.env.RATE_LIMIT_CAPACITY) || 60,
   refillPerSec: Number(process.env.RATE_LIMIT_PER_SEC) || 20,
 });
-const KEY_CREATION_LIMIT = new RateLimiter({ capacity: 5, refillPerSec: 5 / 60 });
+const KEY_CREATION_BURST = Number(process.env.KEY_CREATION_BURST) || 5;
+const KEY_CREATION_LIMIT = new RateLimiter({ capacity: KEY_CREATION_BURST, refillPerSec: KEY_CREATION_BURST / 60 });
 setInterval(() => {
   REQUEST_LIMIT.sweep();
   KEY_CREATION_LIMIT.sweep();
 }, 60 * 1000).unref();
 
 function clientIp(req) {
+  if (TRUST_PROXY) {
+    const forwarded = req.headers['fly-client-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -55,14 +72,39 @@ function sendJson(res, status, body, extraHeaders = {}) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      if (chunks.length === 0) return resolve(undefined);
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-      } catch (err) {
-        reject(new Error('invalid JSON body'));
+    let size = 0;
+    let tooLarge = false;
+    // Past the limit, stop buffering but keep draining the upload, so the
+    // client still receives the 413 instead of a reset connection.
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (tooLarge) return;
+      if (size > MAX_BODY_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        const error = new Error(`request body larger than ${MAX_BODY_BYTES} bytes`);
+        error.code = 'BODY_TOO_LARGE';
+        return reject(error);
       }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (tooLarge) return;
+      if (chunks.length === 0) return resolve(undefined);
+      let parsed;
+      try {
+        parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        parsed = undefined;
+      }
+      // Documents are JSON objects; a bare string or array would otherwise
+      // get spread into a nonsense document.
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        const error = new Error('body must be a JSON object');
+        error.code = 'INVALID_BODY';
+        return reject(error);
+      }
+      resolve(parsed);
     });
     req.on('error', reject);
   });
@@ -101,6 +143,10 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 204, {});
   }
 
+  if (req.method === 'GET' && url.pathname === '/healthz') {
+    return sendJson(res, 200, { ok: true });
+  }
+
   // Signing up IS creating a key: no email, no account, no approval step.
   // Rate-limited by IP since it's the one v1 endpoint that isn't
   // authenticated — otherwise it's a free way to mint unlimited identities.
@@ -135,13 +181,15 @@ const server = http.createServer(async (req, res) => {
     try {
       // GET  /v1/_colony/stats
       if (req.method === 'GET' && segments[1] === '_colony' && segments[2] === 'stats') {
-        return sendJson(res, 200, colony.stats());
+        return sendJson(res, 200, colony.stats(apiKey));
       }
       // POST /v1/_colony/replicas/:id/fail | /heal  (demo/admin controls)
       if (req.method === 'POST' && segments[1] === '_colony' && segments[2] === 'replicas' && segments[4]) {
         const replicaId = segments[3];
         const action = segments[4];
-        const ok = action === 'fail' ? colony.failReplica(replicaId) : action === 'heal' ? colony.healReplica(replicaId) : false;
+        // Scoped to the caller's namespace: this simulates an outage as
+        // *this* tenant experiences it, never for anyone else.
+        const ok = action === 'fail' ? colony.failReplica(apiKey, replicaId) : action === 'heal' ? colony.healReplica(apiKey, replicaId) : false;
         if (!ok) return sendJson(res, 404, { error: `unknown replica or action: ${replicaId}/${action}` });
         return sendJson(res, 200, { replicaId, action, ok: true });
       }
@@ -150,6 +198,9 @@ const server = http.createServer(async (req, res) => {
       if (segments[1] === 'db' && segments[2]) {
         const collection = segments[2];
         const id = segments[3];
+        if (!NAME_PATTERN.test(collection) || (id !== undefined && !NAME_PATTERN.test(id)) || segments.length > 4) {
+          return sendJson(res, 400, { error: 'collection names and ids must match [A-Za-z0-9_-]{1,128}' });
+        }
 
         if (req.method === 'POST' && !id) {
           const body = (await readBody(req)) || {};
@@ -191,7 +242,12 @@ const server = http.createServer(async (req, res) => {
 
       return sendJson(res, 404, { error: 'no such route' });
     } catch (err) {
-      const status = err.code === 'SHARD_UNAVAILABLE' ? 503 : 500;
+      const status = {
+        SHARD_UNAVAILABLE: 503,
+        QUOTA_EXCEEDED: 403,
+        BODY_TOO_LARGE: 413,
+        INVALID_BODY: 400,
+      }[err.code] || 500;
       return sendJson(res, status, { error: err.message });
     }
   }
@@ -204,6 +260,14 @@ server.listen(PORT, () => {
   console.log(`AntSQL Cloud listening on http://localhost:${PORT}`);
   console.log(`  website:    http://localhost:${PORT}/`);
   console.log(`  create key: curl -X POST http://localhost:${PORT}/v1/keys`);
+});
+
+// Hosts send SIGTERM before replacing a machine. WAL appends are
+// synchronous, so every acknowledged write is already on disk; just stop
+// accepting new connections and exit.
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
 });
 
 module.exports = { server, colony, keys };

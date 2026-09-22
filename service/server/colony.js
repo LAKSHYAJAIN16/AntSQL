@@ -29,6 +29,10 @@ class Replica {
     this.id = id;
     this.baseLatencyMs = baseLatencyMs;
     this.alive = true;
+    // Fault injection is scoped per tenant namespace: on a shared hosted
+    // instance, one tenant "failing" a replica for the demo must not take
+    // it down for everyone else.
+    this.failedFor = new Set();
     this.store = new Map();
     this.walPath = walPath;
     this._replayWal();
@@ -42,6 +46,20 @@ class Replica {
       if (record.op === 'set') this.store.set(record.key, record.value);
       else if (record.op === 'delete') this.store.delete(record.key);
     }
+    // Compact on startup once the log is mostly overwritten history, so a
+    // long-running hosted instance's WAL doesn't grow without bound.
+    if (lines.length > 1000 && lines.length > 2 * this.store.size) this._compact();
+  }
+
+  _compact() {
+    const tmp = `${this.walPath}.tmp`;
+    const lines = [...this.store].map(([key, value]) => JSON.stringify({ op: 'set', key, value }));
+    fs.writeFileSync(tmp, lines.length ? lines.join('\n') + '\n' : '');
+    fs.renameSync(tmp, this.walPath);
+  }
+
+  isUpFor(namespace) {
+    return this.alive && !this.failedFor.has(namespace);
   }
 
   _appendWal(record) {
@@ -59,17 +77,29 @@ class Replica {
     }
   }
 
-  async read(key) {
-    if (!this.alive) throw new Error(`replica ${this.id} is unreachable`);
+  async read(key, namespace) {
+    if (!this.isUpFor(namespace)) throw new Error(`replica ${this.id} is unreachable`);
     await sleep(this.baseLatencyMs + Math.random() * 1.5);
     return this.store.has(key) ? this.store.get(key) : null;
   }
 
-  // Used when a failed replica comes back: it missed every write while
-  // down, so it needs a full copy from a live sibling rather than relying
-  // on its own (now-stale) WAL.
-  syncFrom(other) {
-    this.store = new Map(other.store);
+  // Used when a failed replica comes back for a namespace: it missed every
+  // write to that namespace while down, so it copies that namespace's keys
+  // from a live sibling. Changes go through the WAL too, so the resync
+  // survives a restart instead of replaying the stale pre-failure state.
+  syncPrefixFrom(other, prefix) {
+    for (const key of [...this.store.keys()]) {
+      if (key.startsWith(prefix) && !other.store.has(key)) {
+        this.store.delete(key);
+        this._appendWal({ op: 'delete', key });
+      }
+    }
+    for (const [key, value] of other.store) {
+      if (!key.startsWith(prefix)) continue;
+      if (JSON.stringify(this.store.get(key)) === JSON.stringify(value)) continue;
+      this.store.set(key, value);
+      this._appendWal({ op: 'set', key, value });
+    }
   }
 }
 
@@ -88,8 +118,11 @@ class Shard {
 }
 
 class Colony {
-  constructor(dataDir) {
+  constructor(dataDir, { maxDocsPerTenant = Infinity } = {}) {
     this.dataDir = dataDir;
+    this.maxDocsPerTenant = maxDocsPerTenant;
+    // namespace -> live document count, for the per-tenant quota.
+    this.tenantDocCounts = new Map();
     fs.mkdirSync(dataDir, { recursive: true });
     this.shards = Array.from({ length: SHARD_COUNT }, (_, i) => new Shard(i, dataDir));
     this.router = new Router();
@@ -107,7 +140,7 @@ class Colony {
       for (const docKey of representative.store.keys()) {
         const collectionKey = docKey.slice(0, docKey.lastIndexOf('/'));
         const id = docKey.slice(docKey.lastIndexOf('/') + 1);
-        this._indexFor(collectionKey).add(id);
+        this._addToIndex(collectionKey, id);
       }
     }
   }
@@ -121,6 +154,28 @@ class Colony {
     return set;
   }
 
+  _addToIndex(collectionKey, id) {
+    const index = this._indexFor(collectionKey);
+    if (index.has(id)) return;
+    index.add(id);
+    const ns = namespaceOf(collectionKey);
+    this.tenantDocCounts.set(ns, (this.tenantDocCounts.get(ns) || 0) + 1);
+  }
+
+  _removeFromIndex(collectionKey, id) {
+    if (!this._indexFor(collectionKey).delete(id)) return;
+    const ns = namespaceOf(collectionKey);
+    this.tenantDocCounts.set(ns, this.tenantDocCounts.get(ns) - 1);
+  }
+
+  _findReplica(replicaId) {
+    for (const shard of this.shards) {
+      const replica = shard.replicas.find((r) => r.id === replicaId);
+      if (replica) return { shard, replica };
+    }
+    return null;
+  }
+
   _shardFor(docKey) {
     return this.shards[hashToShard(docKey)];
   }
@@ -129,9 +184,15 @@ class Colony {
     const collectionKey = `${namespace}/${collection}`;
     const docKey = `${collectionKey}/${id}`;
     const shard = this._shardFor(docKey);
-    await Promise.all(shard.replicas.filter((r) => r.alive).map((r) => r.write(docKey, value)));
-    if (value === null) this._indexFor(collectionKey).delete(id);
-    else this._indexFor(collectionKey).add(id);
+    const isNew = value !== null && !this._indexFor(collectionKey).has(id);
+    if (isNew && (this.tenantDocCounts.get(namespace) || 0) >= this.maxDocsPerTenant) {
+      const error = new Error(`document quota reached (${this.maxDocsPerTenant} per API key)`);
+      error.code = 'QUOTA_EXCEEDED';
+      throw error;
+    }
+    await Promise.all(shard.replicas.filter((r) => r.isUpFor(namespace)).map((r) => r.write(docKey, value)));
+    if (value === null) this._removeFromIndex(collectionKey, id);
+    else this._addToIndex(collectionKey, id);
     return { id, shard: shard.id };
   }
 
@@ -160,7 +221,7 @@ class Colony {
       const replica = shard.replicas.find((r) => r.id === decision.nextHop);
       const start = Date.now();
       try {
-        const value = await replica.read(docKey);
+        const value = await replica.read(docKey, namespace);
         const elapsedMs = Date.now() - start;
         this.router.observeSuccess(routeKey, decision.nextHop, elapsedMs);
         return { value, servedBy: replica.id, shard: shard.id, elapsedMs, exists: value !== null };
@@ -190,48 +251,62 @@ class Colony {
     return results.filter((doc) => doc !== null);
   }
 
-  failReplica(replicaId) {
-    for (const shard of this.shards) {
-      const replica = shard.replicas.find((r) => r.id === replicaId);
-      if (replica) {
-        replica.alive = false;
-        return true;
-      }
-    }
-    return false;
+  failReplica(namespace, replicaId) {
+    const found = this._findReplica(replicaId);
+    if (!found) return false;
+    found.replica.failedFor.add(namespace);
+    return true;
   }
 
-  healReplica(replicaId) {
-    for (const shard of this.shards) {
-      const replica = shard.replicas.find((r) => r.id === replicaId);
-      if (replica) {
-        replica.alive = true;
-        const source = shard.replicas.find((r) => r.alive && r.id !== replicaId);
-        if (source) replica.syncFrom(source);
-        return true;
-      }
-    }
-    return false;
+  healReplica(namespace, replicaId) {
+    const found = this._findReplica(replicaId);
+    if (!found) return false;
+    const { shard, replica } = found;
+    replica.failedFor.delete(namespace);
+    const source = shard.replicas.find((r) => r.id !== replicaId && r.isUpFor(namespace));
+    if (source) replica.syncPrefixFrom(source, `${namespace}/`);
+    return true;
   }
 
-  stats() {
+  // Everything here is scoped to one tenant: replica health as that tenant
+  // sees it, that tenant's doc counts, and only that tenant's pheromone
+  // trails (with the namespace stripped from each route key, since the
+  // namespace is the tenant's API key).
+  stats(namespace) {
+    const prefix = `${namespace}/`;
+    const docCounts = new Map();
+    for (const [collectionKey, ids] of this.indexes) {
+      if (!collectionKey.startsWith(prefix)) continue;
+      for (const id of ids) {
+        const docKey = `${collectionKey}/${id}`;
+        for (const r of this._shardFor(docKey).replicas) {
+          if (r.store.has(docKey)) docCounts.set(r.id, (docCounts.get(r.id) || 0) + 1);
+        }
+      }
+    }
     const pheromone = {};
     for (const [routeKey, scores] of this.router.pheromone) {
-      pheromone[routeKey] = Object.fromEntries(scores);
+      if (routeKey.startsWith(prefix)) pheromone[routeKey.slice(prefix.length)] = Object.fromEntries(scores);
     }
     return {
       shards: this.shards.map((shard) => ({
         id: shard.id,
         replicas: shard.replicas.map((r) => ({
           id: r.id,
-          alive: r.alive,
+          alive: r.isUpFor(namespace),
           baseLatencyMs: r.baseLatencyMs,
-          docCount: r.store.size,
+          docCount: docCounts.get(r.id) || 0,
         })),
       })),
       pheromone,
+      documents: this.tenantDocCounts.get(namespace) || 0,
+      quota: Number.isFinite(this.maxDocsPerTenant) ? this.maxDocsPerTenant : null,
     };
   }
+}
+
+function namespaceOf(collectionKey) {
+  return collectionKey.slice(0, collectionKey.indexOf('/'));
 }
 
 module.exports = { Colony, SHARD_COUNT, hashToShard };

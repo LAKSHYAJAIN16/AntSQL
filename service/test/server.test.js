@@ -31,7 +31,7 @@ function waitForReady(proc) {
 test.before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'antsql-cloud-test-'));
   serverProcess = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js')], {
-    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir },
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir, KEY_CREATION_BURST: '100' },
     cwd: path.join(__dirname, '..'),
     stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -158,4 +158,69 @@ test('reads survive a replica failure and the colony reports it as unhealthy', a
 
   const healed = await fetch(`${BASE_URL}/v1/_colony/replicas/${servingReplica}/heal`, authed(apiKey, { method: 'POST' }));
   assert.equal(healed.status, 200);
+});
+
+test('colony stats never expose another tenant\'s API key or data', async () => {
+  const keyA = await createKey();
+  const keyB = await createKey();
+  const created = await fetch(`${BASE_URL}/v1/db/secrets`, authed(keyA, {
+    method: 'POST',
+    body: JSON.stringify({ v: 1 }),
+  }));
+  const doc = await created.json();
+  await fetch(`${BASE_URL}/v1/db/secrets/${doc.id}`, authed(keyA));
+
+  const statsB = await (await fetch(`${BASE_URL}/v1/_colony/stats`, authed(keyB))).json();
+  const raw = JSON.stringify(statsB);
+  assert.ok(!raw.includes(keyA), 'stats leaked another tenant\'s key');
+  assert.equal(statsB.documents, 0);
+  assert.deepEqual(statsB.pheromone, {});
+
+  const statsA = await (await fetch(`${BASE_URL}/v1/_colony/stats`, authed(keyA))).json();
+  assert.ok(!JSON.stringify(statsA).includes(keyA), 'stats echoed the caller\'s own key');
+  assert.equal(statsA.documents, 1);
+  assert.ok(Object.keys(statsA.pheromone).some((k) => k.startsWith('secrets#shard')));
+});
+
+test('failing a replica only affects the tenant that failed it, and heal resyncs missed writes', async () => {
+  const keyA = await createKey();
+  const keyB = await createKey();
+  const statsBefore = await (await fetch(`${BASE_URL}/v1/_colony/stats`, authed(keyA))).json();
+  const replicaIds = statsBefore.shards[0].replicas.map((r) => r.id);
+
+  for (const id of replicaIds) {
+    await fetch(`${BASE_URL}/v1/_colony/replicas/${id}/fail`, authed(keyA, { method: 'POST' }));
+  }
+  const statsB = await (await fetch(`${BASE_URL}/v1/_colony/stats`, authed(keyB))).json();
+  assert.ok(statsB.shards[0].replicas.every((r) => r.alive), 'tenant B saw tenant A\'s injected failure');
+
+  for (const id of replicaIds.slice(1)) {
+    await fetch(`${BASE_URL}/v1/_colony/replicas/${id}/heal`, authed(keyA, { method: 'POST' }));
+  }
+  // Write while replicaIds[0] is still down for A, then heal it: it must
+  // pick the write up from a sibling.
+  const docs = [];
+  for (let i = 0; i < 8; i++) {
+    docs.push(await (await fetch(`${BASE_URL}/v1/db/items`, authed(keyA, { method: 'POST', body: JSON.stringify({ i }) }))).json());
+  }
+  await fetch(`${BASE_URL}/v1/_colony/replicas/${replicaIds[0]}/heal`, authed(keyA, { method: 'POST' }));
+  const after = await (await fetch(`${BASE_URL}/v1/_colony/stats`, authed(keyA))).json();
+  const shard0 = after.shards[0].replicas;
+  assert.ok(shard0.every((r) => r.alive));
+  assert.equal(new Set(shard0.map((r) => r.docCount)).size, 1, 'healed replica did not resync');
+});
+
+test('rejects oversized bodies, non-object bodies, and bad names', async () => {
+  const apiKey = await createKey();
+  const big = await fetch(`${BASE_URL}/v1/db/blobs`, authed(apiKey, { method: 'POST', body: JSON.stringify({ x: 'a'.repeat(300 * 1024) }) }));
+  assert.equal(big.status, 413);
+  const arr = await fetch(`${BASE_URL}/v1/db/blobs`, authed(apiKey, { method: 'POST', body: '[1,2]' }));
+  assert.equal(arr.status, 400);
+  const bad = await fetch(`${BASE_URL}/v1/db/bad.name`, authed(apiKey));
+  assert.equal(bad.status, 400);
+});
+
+test('health check responds without auth', async () => {
+  const res = await fetch(`${BASE_URL}/healthz`);
+  assert.equal(res.status, 200);
 });
