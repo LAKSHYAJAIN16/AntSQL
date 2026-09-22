@@ -34,8 +34,30 @@ Node):
 const { AntSQL } = require('./sdk/antsql-client');
 const apiKey = await AntSQL.createKey('http://localhost:4280');
 const db = new AntSQL({ apiKey, baseUrl: 'http://localhost:4280' });
-const ref = await db.collection('users').add({ name: 'Ada' });
+const ref = await db.collection('users').add({ name: 'Ada', age: 36 });
 console.log((await db.collection('users').doc(ref.id).get()).data());
+
+// Queries: filters, ordering, and cursor pagination.
+const page = await db.collection('users').where('age', '>=', 21).orderBy('age', 'desc').limit(20).get();
+const next = await db.collection('users').where('age', '>=', 21).orderBy('age', 'desc').limit(20).startAfter(page.nextCursor).get();
+```
+
+The same query over HTTP (URL-encode the values):
+
+```bash
+curl -G http://localhost:4280/v1/db/users -H "Authorization: Bearer ant_..."   --data-urlencode 'where=age>=21' --data-urlencode 'orderBy=age' --data-urlencode 'dir=desc' --data-urlencode 'limit=20'
+# {"docs":[...],"nextCursor":"<id>" | null}
+```
+
+Operators: `== != < <= > >=`. Values are JSON-parsed (`21`, `true`,
+`"21"`), otherwise taken as strings. Fields can be dotted paths
+(`address.city`). Range operators only match values of the same type.
+
+In a browser, load the SDK straight from the server; it defaults to that
+origin:
+
+```html
+<script src="https://<your-host>/sdk/antsql-client.js"></script>
 ```
 
 Run the tests: `npm test` (spawns the real server, no mocks, including a
@@ -62,6 +84,9 @@ test that fails a replica mid-flight and checks reads still succeed).
 - **Failure demo**: `POST /v1/_colony/replicas/:id/fail` and `/heal` let you
   (or the website's playground) kill and revive a replica live and watch
   `GET /v1/_colony/stats` show the pheromone trail move to the survivor.
+  Both are **scoped to your API key**: a failure you inject only affects
+  your reads, and stats only show your own documents and pheromone trails,
+  so one tenant can't take down or observe another on a shared host.
 - **Rate limiting**: `server/rateLimit.js` is a per-identity token bucket.
   Every authenticated `/v1/*` request draws from a per-API-key bucket
   (`RATE_LIMIT_CAPACITY`, default 60 burst; `RATE_LIMIT_PER_SEC`, default 20
@@ -86,16 +111,40 @@ mechanism running as genuinely separate processes over real sockets with
 real embedded SQL storage, that's what the C++ colony demo is for; this
 service trades that for something a browser or `curl` can actually talk to.
 
+## Deploy (Fly.io)
+
+```bash
+cd service
+fly auth login
+fly launch --no-deploy --copy-config   # picks a unique app name
+fly volumes create antsql_data --size 1 --region iad
+fly deploy
+```
+
+`fly.toml` scales to zero when idle (cheapest; ~1-2 s cold start) and
+mounts the volume at `/data`. The `Dockerfile` also works on Railway or
+Render, as long as a persistent volume is mounted at `DATA_DIR`. Don't use
+a stateless serverless platform: the replicas and WAL live in one
+process's memory and disk on purpose.
+
+## Configuration
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `PORT` | `4280` | Listen port |
+| `DATA_DIR` | `service/data` | WALs and key store; must be persistent |
+| `TRUST_PROXY` | off | `1` to take the client IP from `Fly-Client-IP` / `X-Forwarded-For` (only behind a proxy) |
+| `MAX_DOCS_PER_KEY` | unlimited | Per-tenant document quota (`403` when reached) |
+| `MAX_BODY_BYTES` | `262144` | Request body cap (`413` above it) |
+| `RATE_LIMIT_CAPACITY` / `RATE_LIMIT_PER_SEC` | `60` / `20` | Per-key token bucket |
+| `KEY_CREATION_BURST` | `5` | Keys per IP per minute |
+
 ## Not done yet (be honest about this before pointing anyone at it)
 
-- No public deployment — this only runs on `localhost` right now. Deploying
-  it for real needs a host that runs one persistent Node process with a
-  writable, persistent disk mounted at `DATA_DIR` (Render, Fly.io, Railway,
-  a VPS) — not a stateless serverless platform: the colony's replicas and
-  WAL live in that one process's memory and local disk on purpose (that's
-  what makes the failure/healing demo real instead of mocked), so a
-  request-scoped serverless function would lose it between invocations.
-- No persistence beyond a single machine's disk (no S3/replicated backups).
-- No query language beyond "get by id" / "list whole collection" — no
-  filtering, sorting, or pagination yet.
+- Replicas are simulated inside one process, so a machine crash takes all
+  of them down at once. Real multi-machine replicas are the next step
+  (see [`../SCOPE.md`](../SCOPE.md)).
+- No backups beyond the host's volume snapshots.
+- Queries scan the collection; there are no secondary indexes yet.
+- No transactions or batched writes.
 - The API key itself is the only secret; there's no per-key permission model.

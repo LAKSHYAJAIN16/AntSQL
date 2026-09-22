@@ -36,7 +36,7 @@ node server/index.js   # AntSQL Cloud on http://localhost:4280
 npm test
 ```
 
-See [`service/README.md`](service/README.md) for the full API.
+It supports Firestore-style queries (`where`/`orderBy`/`limit`/cursors), per-tenant isolation, and ships with a Dockerfile and a scale-to-zero `fly.toml`. See [`service/README.md`](service/README.md) for the full API and deploy steps, and [`SCOPE.md`](SCOPE.md) for what's left on both the hosted service and the engine's path to a real PostgreSQL gateway.
 
 ## `sim/`: the Python research model
 
